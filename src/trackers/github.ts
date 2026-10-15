@@ -4,7 +4,8 @@
  * Facts are computed here, by code, so the decision model never counts.
  */
 
-import { graphql } from "@octokit/graphql";
+import { GraphqlResponseError, graphql } from "@octokit/graphql";
+import { RefusalError } from "../errors.js";
 import type { Ticket } from "../ticket.js";
 import type { Tracker } from "./tracker.js";
 
@@ -60,6 +61,36 @@ interface PendingPage {
   };
 }
 
+/** A tracker failure. Value-free: it names the operation and the HTTP
+ * status, never the token or any text from GitHub's reply. */
+export class GitHubTrackerError extends RefusalError {
+  constructor(message: string) {
+    super(message);
+    this.name = "GitHubTrackerError";
+  }
+}
+
+/** Translates whatever octokit threw into a value-free refusal. */
+function refusalFor(err: unknown, operation: string, tokenEnvVar: string): GitHubTrackerError {
+  if (err instanceof GraphqlResponseError) {
+    return new GitHubTrackerError(`GitHub answered HTTP 200 with GraphQL errors while ${operation}`);
+  }
+  const e = err as { name?: unknown; status?: unknown; response?: unknown } | null;
+  if (e?.name === "HttpError" && typeof e.status === "number") {
+    // octokit reports a network failure as status 500 with no response.
+    if (e.response === undefined) return new GitHubTrackerError(`could not reach GitHub while ${operation}`);
+    if (e.status === 401 || e.status === 403) {
+      return new GitHubTrackerError(
+        `GitHub refused the token while ${operation} (HTTP ${e.status}). ` +
+          `Set ${tokenEnvVar} to a token that can read the repository; with the gh CLI: ` +
+          `gh auth login, then export ${tokenEnvVar}=$(gh auth token)`,
+      );
+    }
+    return new GitHubTrackerError(`GitHub answered HTTP ${e.status} while ${operation}`);
+  }
+  return new GitHubTrackerError(`could not reach GitHub while ${operation}`);
+}
+
 function toTicket(owner: string, repo: string, node: IssueNode): Ticket {
   const events = node.timelineItems.nodes.map((n) => n?.__typename);
   const count = (...types: string[]) => events.filter((t) => t !== undefined && types.includes(t)).length;
@@ -79,10 +110,19 @@ function toTicket(owner: string, repo: string, node: IssueNode): Ticket {
 
 export function githubTracker(opts: GitHubTrackerOptions): Tracker {
   const { owner, repo } = opts;
+  const tokenEnvVar = opts.tokenEnvVar ?? "GITHUB_TOKEN";
   const gh = graphql.defaults({
     headers: { authorization: `token ${opts.token}` },
     ...(opts.fetch ? { request: { fetch: opts.fetch } } : {}),
   });
+
+  async function call<T>(operation: string, query: string, variables: Record<string, unknown>): Promise<T> {
+    try {
+      return await gh<T>(query, variables);
+    } catch (err) {
+      throw refusalFor(err, operation, tokenEnvVar);
+    }
+  }
 
   return {
     source: `github:${owner}/${repo}`.toLowerCase(),
@@ -90,7 +130,11 @@ export function githubTracker(opts: GitHubTrackerOptions): Tracker {
       const tickets: Ticket[] = [];
       let after: string | null = null;
       for (;;) {
-        const page: PendingPage = await gh<PendingPage>(PENDING_QUERY, { owner, name: repo, after });
+        const page: PendingPage = await call<PendingPage>(
+          `listing ${owner}/${repo}'s open issues`,
+          PENDING_QUERY,
+          { owner, name: repo, after },
+        );
         const { nodes, pageInfo } = page.repository.issues;
         tickets.push(...nodes.map((n) => toTicket(owner, repo, n)));
         if (!pageInfo.hasNextPage || pageInfo.endCursor === null) break;

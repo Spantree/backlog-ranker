@@ -108,3 +108,55 @@ describe("githubTracker pending()", () => {
     expect(b).toMatchObject({ key: "o/r#4", linkedIssues: 3, duplicates: 1 });
   });
 });
+
+describe("githubTracker errors", () => {
+  test("401 refuses naming the operation, status, token variable and gh commands, never the token", async () => {
+    const gh = fakeGitHub(() => Response.json({ message: "Bad credentials ghp_secret" }, { status: 401 }));
+    const err = await caught(
+      githubTracker({ owner: "o", repo: "r", token: "ghp_secret", fetch: gh.fetch }).pending(),
+    );
+    expect(err.message).toBe(
+      "GitHub refused the token while listing o/r's open issues (HTTP 401). " +
+        "Set GITHUB_TOKEN to a token that can read the repository; with the gh CLI: " +
+        "gh auth login, then export GITHUB_TOKEN=$(gh auth token)",
+    );
+    expect(err.message).not.toContain("ghp_secret");
+  });
+
+  test("403 names a custom token variable", async () => {
+    const gh = fakeGitHub(() => new Response("", { status: 403 }));
+    const tracker = githubTracker({
+      owner: "o",
+      repo: "r",
+      token: "t",
+      fetch: gh.fetch,
+      tokenEnvVar: "KIT_GH",
+    });
+    const err = await caught(tracker.pending());
+    expect(err.message).toContain("(HTTP 403). Set KIT_GH to a token");
+    expect(err.message).toContain("export KIT_GH=$(gh auth token)");
+  });
+
+  test("other HTTP failures name the operation and status only", async () => {
+    const gh = fakeGitHub(() => Response.json({ message: "boom with secret detail" }, { status: 502 }));
+    const err = await caught(githubTracker({ owner: "o", repo: "r", token: "t", fetch: gh.fetch }).pending());
+    expect(err.message).toBe("GitHub answered HTTP 502 while listing o/r's open issues");
+  });
+
+  test("GraphQL errors refuse without echoing the reply", async () => {
+    const gh = fakeGitHub(() =>
+      Response.json({ data: null, errors: [{ message: "Could not resolve to a Repository secret-text" }] }),
+    );
+    const err = await caught(githubTracker({ owner: "o", repo: "r", token: "t", fetch: gh.fetch }).pending());
+    expect(err.message).toBe("GitHub answered HTTP 200 with GraphQL errors while listing o/r's open issues");
+    expect(err.message).not.toContain("secret-text");
+  });
+
+  test("an unreachable GitHub refuses naming the operation", async () => {
+    const fetch = (async () => {
+      throw new TypeError("connect ECONNREFUSED secret-host");
+    }) as unknown as typeof globalThis.fetch;
+    const err = await caught(githubTracker({ owner: "o", repo: "r", token: "t", fetch }).pending());
+    expect(err.message).toBe("could not reach GitHub while listing o/r's open issues");
+  });
+});
