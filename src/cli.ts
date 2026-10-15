@@ -157,7 +157,10 @@ function requiredString(verb: Verb, values: Values, name: string): string {
 
 function noPositionals(verb: Verb, positionals: readonly string[]): void {
   if (positionals.length > 0) {
-    throw usageError(verb, `unexpected argument${positionals.length > 1 ? "s" : ""} ${positionals.join(" ")}`);
+    throw usageError(
+      verb,
+      `unexpected argument${positionals.length > 1 ? "s" : ""} ${positionals.join(" ")}`,
+    );
   }
 }
 
@@ -167,7 +170,8 @@ function boundedInt(verb: Verb, values: Values, name: string, max: number): numb
   if (raw === undefined) return undefined;
   const n = typeof raw === "string" && /^\d+$/.test(raw) ? Number(raw) : Number.NaN;
   if (!(Number.isSafeInteger(n) && n >= 1 && n <= max)) {
-    const range = max === Number.MAX_SAFE_INTEGER ? "a whole number of at least 1" : `a whole number from 1 to ${max}`;
+    const range =
+      max === Number.MAX_SAFE_INTEGER ? "a whole number of at least 1" : `a whole number from 1 to ${max}`;
     throw usageError(verb, `--${name} takes ${range}, not "${String(raw)}"`);
   }
   return n;

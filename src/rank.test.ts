@@ -46,11 +46,21 @@ beforeEach(() => {
   resolve = () => ({
     projectRoot: root,
     configPath: ".backlog-decisions/config.yaml",
-    config: { sources: ["github:kit/kit"], backend: "openrouter", keys: {} },
+    config: {
+      sources: ["github:kit/kit"],
+      backend: "openrouter",
+      keys: { github: "GITHUB_TOKEN", typesafe: "TYPESAFE_API_KEY", openrouter: "OPENROUTER_API_KEY" },
+    },
     sources: ["github:kit/kit"],
     allowlistKey: "sources in .backlog-decisions/config.yaml",
     backend: "openrouter",
-    engine: () => createJevEngine({ backend: "openrouter", apiKey: "k-test", fetch: net.fetch, retry: { maxRetries: 0 } }),
+    engine: () =>
+      createJevEngine({
+        backend: "openrouter",
+        apiKey: "k-test",
+        fetch: net.fetch,
+        retry: { maxRetries: 0 },
+      }),
     tracker: (source) => {
       if (source.kind !== "github") throw new Error("fixture tracker is GitHub only");
       return githubTracker({ owner: source.owner, repo: source.repo, token: "t", fetch: net.fetch });
@@ -135,7 +145,11 @@ describe("rank", () => {
       source: string;
       engine: string;
       model: string;
-      ranked: { position: number; key: string; answers: Record<string, { kind: string; confidence?: number }> }[];
+      ranked: {
+        position: number;
+        key: string;
+        answers: Record<string, { kind: string; confidence?: number }>;
+      }[];
       held: { position: null; key: string }[];
       stats: { requests: number };
     };

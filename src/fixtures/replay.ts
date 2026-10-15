@@ -29,7 +29,8 @@ export interface RequestCounts {
   other: number;
 }
 
-export type ReplayFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+/** Shaped as the global fetch, so both the tracker and the engine take it. */
+export type ReplayFetch = typeof globalThis.fetch;
 
 interface IssueNode {
   number: number;
@@ -59,7 +60,7 @@ export function replayFetch(): { fetch: ReplayFetch; counts: RequestCounts } {
     .repository.issues.nodes;
   return {
     counts,
-    fetch: async (input, init) => {
+    fetch: (async (input: string | URL | Request, init?: RequestInit) => {
       const url = urlOf(input);
       if (url === GITHUB_GRAPHQL_ENDPOINT) {
         counts.github++;
@@ -81,6 +82,6 @@ export function replayFetch(): { fetch: ReplayFetch; counts: RequestCounts } {
       }
       counts.other++;
       throw new Error(`the fixture network has no route for ${url}`);
-    },
+    }) as ReplayFetch,
   };
 }
