@@ -8,6 +8,7 @@
 import type { AnswerCache } from "./cache.js";
 import { rubricQuestions, type Scored } from "./compose.js";
 import type { DecisionAnswer, DecisionEngine, DecisionQuestion } from "./engine.js";
+import { RefusalError } from "./errors.js";
 import type { Rubric } from "./rubric.js";
 import { byCodePoint, stateHash, type TicketState, toState, utf8Bytes } from "./state.js";
 import { type Ticket, ticketFacts } from "./ticket.js";
@@ -31,6 +32,14 @@ export interface ScoreStats {
   truncated: string[];
 }
 
+/** Refuses a concurrency that is not a whole number of at least 1, which
+ * would otherwise start no runner and fail later inside the pool. */
+export function assertConcurrency(value: number): void {
+  if (!(Number.isSafeInteger(value) && value >= 1)) {
+    throw new RefusalError(`concurrency is a whole number of at least 1, not ${String(value)}`);
+  }
+}
+
 /** Runs `work` over `items`, at most `limit` at a time. The first
  * failure stops new items from starting, and the pool settles every
  * in-flight item before it rethrows, so no request outlives the caller's
@@ -40,6 +49,7 @@ export async function pool<T>(
   limit: number,
   work: (item: T) => Promise<void>,
 ): Promise<void> {
+  assertConcurrency(limit);
   // One iterator shared by every runner: each pulls the next item.
   const queue = items.values();
   let failure: { error: unknown } | undefined;
@@ -65,6 +75,7 @@ export async function scoreTickets(opts: {
   now: Date;
   concurrency?: number;
 }): Promise<{ scored: Scored[]; states: Map<string, TicketState>; stats: ScoreStats }> {
+  if (opts.concurrency !== undefined) assertConcurrency(opts.concurrency);
   const questions = rubricQuestions(opts.rubric);
   const stats: ScoreStats = {
     tickets: opts.tickets.length,
