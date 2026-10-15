@@ -10,7 +10,7 @@ import { rubricQuestions, type Scored } from "./compose.js";
 import type { DecisionAnswer, DecisionEngine, DecisionQuestion } from "./engine.js";
 import type { Rubric } from "./rubric.js";
 import { byCodePoint, stateHash, type TicketState, toState, utf8Bytes } from "./state.js";
-import type { Ticket } from "./ticket.js";
+import { type Ticket, ticketFacts } from "./ticket.js";
 
 export const DEFAULT_CONCURRENCY = 8;
 
@@ -105,7 +105,14 @@ export async function scoreTickets(opts: {
         opts.cache.put(hash, q, answer, fresh.servedModel);
       }
     }
-    scored.set(ticket.key, { key: ticket.key, title: ticket.title, url: ticket.url, truncated, answers });
+    scored.set(ticket.key, {
+      key: ticket.key,
+      title: ticket.title,
+      url: ticket.url,
+      truncated,
+      answers,
+      facts: ticketFacts(ticket),
+    });
   });
 
   stats.truncated.sort(byCodePoint);
