@@ -1,1 +1,5 @@
 .envrc.local
+dist/
+node_modules/
+.backlog-decisions/cache/
+.backlog-decisions/**/*.local.yaml
