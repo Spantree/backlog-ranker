@@ -4,16 +4,16 @@
 
 ## Layout
 
-- `src/cli.ts`: the verb runner, flags and usage text; `src/bin.ts` is the only file that touches the process.
+- `src/cli.ts`: the verb runner and the pipeline the verbs share; `src/cli/flags.ts` (usage text and flag checks), `src/cli/hand.ts` (`--hand` keys), `src/cli/render-error.ts` (failure output). `src/bin.ts` is the only file that touches the process, including the working directory.
 - `src/api.ts`: the library facades `rankBacklog`, `calibrateBacklog`, `explainTicket`. `src/index.ts` is the package's public surface.
-- `src/config.ts`, `src/loader.ts`: `.backlog-decisions/config.yaml`, the project root walk, and the lazily built engine and tracker.
-- `src/source.ts`: source grammar and the allowlist check. `src/errors.ts`: the refusal and help-request brands.
+- `src/config.ts`, `src/loader.ts`: `.backlog-decisions/config.yaml`, the project root walk, and the lazily built engine and tracker (the tracker re-checks the allowlist). `src/keys.ts`: the one table of default key variable names.
+- `src/source.ts`: source grammar, the one issue-key grammar, and the allowlist check. `src/errors.ts`: the refusal and help-request brands.
 - `src/rubric.ts`, `src/state.ts`, `src/score.ts`, `src/compose.ts`, `src/tiebreak.ts`, `src/kendall.ts`, `src/cache.ts`, `src/table.ts`: rubric parsing, state building, scoring, composition, tie-break, tau, the answer cache and rendering.
 - `src/engine.ts`: the engine-neutral decision interface. `src/jev/`: the Jev adapter over `@typesafe-ai/sdk` and the backend table.
 - `src/trackers/`: the `Tracker` interface and the GitHub adapter.
-- `src/fixtures/`: the fixture rubric, the GitHub issue page, recorded Jev responses (`jev/<hash16>.json`) and `replay.ts`, the offline fetch the suite runs on.
+- `src/fixtures/`: the fixture rubric, the GitHub issue page, recorded Jev responses (`jev/<hash16>.json`), `replay.ts` (the offline fetch the suite runs on) and `project.ts` (the CLI suites' fixture project, io capture and temp roots).
 - `rubrics/impact-roi.yaml`: the shipped example rubric. `skills/backlog-decisions/SKILL.md`: the shipped agent skill.
-- `scripts/capture-fixtures.ts`: re-records the Jev fixtures. `docs/`: user docs. `.scratch/`: local issues and specs, never shipped.
+- `scripts/capture-fixtures.ts`: re-records the Jev fixtures. `docs/`: user docs, shipped in the package (`docs/agents/` is not). `.scratch/`: local issues and specs, never shipped.
 
 ## Commands
 

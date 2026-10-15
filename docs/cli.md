@@ -19,6 +19,7 @@ Every verb reads `.backlog-decisions/config.yaml` from the project root and chec
 usage: backlog-decisions rank --rubric <name|path> --source <spec> [options]
 
   -r, --rubric <name>     Rubric under .backlog-decisions/rubrics/, or a YAML file path
+                          (a relative path resolves against the project root)
   -s, --source <spec>     github:owner/repo (linear:TEAM is planned)
   -w, --weight <id=n>     Override a criterion weight; repeatable
   -t, --tiebreak <n>      Pairwise tie-break depth
@@ -44,9 +45,10 @@ backlog-decisions rank -r impact-roi -s github:acme/app -w impact=2 -t 5
 ## calibrate
 
 ```text
-usage: backlog-decisions calibrate --rubric <name> --source <spec> --hand KEY,KEY,... [options]
+usage: backlog-decisions calibrate --rubric <name|path> --source <spec> --hand KEY,KEY,... [options]
 
-  -r, --rubric <name>     Rubric under .backlog-decisions/rubrics/
+  -r, --rubric <name>     Rubric under .backlog-decisions/rubrics/, or a YAML file path
+                          (a relative path resolves against the project root)
   -s, --source <spec>     github:owner/repo (linear:TEAM is planned)
       --hand <keys>       Hand ranking, best first, comma separated
   -w, --weight <id=n>     Override a criterion weight; repeatable
@@ -67,11 +69,14 @@ backlog-decisions calibrate -r impact-roi -s github:acme/app --hand '#12,#7,#31,
 ## explain
 
 ```text
-usage: backlog-decisions explain --rubric <name> <owner/repo#123> [options]
+usage: backlog-decisions explain --rubric <name|path> <owner/repo#123> [options]
 
-  -r, --rubric <name>     Rubric under .backlog-decisions/rubrics/
+  -r, --rubric <name>     Rubric under .backlog-decisions/rubrics/, or a YAML file path
+                          (a relative path resolves against the project root)
   -j, --json              Machine-readable output
   -h, --help              This text
+
+Decision-model answers come from the cache after a rank; one GitHub lookup reads the issue.
 ```
 
 Prints one issue's composite, each criterion's per-level probabilities, score and confidence, each gate's probability against its threshold and whether it pinned or held the issue, and its flags. The source is the key's repository, which must be on the allowlist, and the header names it. Decision-model answers come from the cache after a rank; one GitHub lookup reads the issue. Without cached answers, one decision-model request is sent.
