@@ -78,9 +78,11 @@ as ranking policy. When both exist, the local file is read instead.
    without asking the model: `hold` or `sink` an issue when a fact
    (`open_blockers`, `open_closing_prs`, `assignees`, `reactions`,
    `linked_issues`, `duplicates`) is `at_least` a whole number of 1 or
-   more. Offer the two `impact-roi` ships (sink blocked issues, hold
-   issues with an open closing pull request); ask before gating on
-   assignees, which means "started" only on some teams.
+   more. Offer the one `impact-roi` ships (sink issues with an open
+   blocker). Ask before holding work already in progress: an open
+   closing pull request or an assignee means "started" only on some
+   teams, so a hold on `open_closing_prs` or `assignees` is the
+   user's choice, not a default.
 4. **Composition.** `roi` (weighted benefit over weighted cost, both
    on a 1-based level scale) or `weighted_sum` (compensating
    criteria, cost flipped). Weights can change later for free; under
