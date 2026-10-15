@@ -1,0 +1,37 @@
+{
+  "model": "jev-1.13.0",
+  "answers": {
+    "urgency": {
+      "type": "score",
+      "score": 2.0,
+      "confidence": 1.0,
+      "legend": {
+        "0": "Can wait",
+        "1": "This week",
+        "2": "Blocking revenue now"
+      },
+      "probabilities": {
+        "0": 0.0,
+        "1": 0.0,
+        "2": 1.0
+      }
+    },
+    "is_bug": {
+      "type": "noul",
+      "noul": 0.96
+    },
+    "team": {
+      "type": "choice",
+      "choice": "payments",
+      "confidence": 0.66,
+      "probabilities": {
+        "payments": 0.83,
+        "frontend": 0.17
+      }
+    }
+  },
+  "usage": {
+    "input_tokens": 382,
+    "output_tokens": 62
+  }
+}

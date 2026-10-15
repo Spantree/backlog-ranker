@@ -19,6 +19,23 @@ export {
   REFUSAL_MARKER,
   RefusalError,
 } from "./errors.js";
+export {
+  BACKEND_NAMES,
+  BACKENDS,
+  type Backend,
+  type BackendName,
+  createJevEngine,
+  DEFAULT_JEV_MODEL,
+  isBackendName,
+  isJevModel,
+  JEV_ENGINE_ID,
+  JEV_MODELS,
+  type JevEngineOptions,
+  JevError,
+  type JevFetch,
+  type JevModel,
+  type JevRetryPolicy,
+} from "./jev/index.js";
 export { type Calibration, kendallTau, TRUST_MIN_TICKETS, TRUST_TAU } from "./kendall.js";
 export {
   type Criterion,
@@ -34,6 +51,7 @@ export {
   withWeights,
 } from "./rubric.js";
 export { DEFAULT_CONCURRENCY, longestQuestionBytes, pool, type ScoreStats, scoreTickets } from "./score.js";
+export { assertAllowed, parseSource, SourceError, type SourceRef } from "./source.js";
 export {
   AGE_BUCKETS,
   type AgeBucket,
@@ -55,4 +73,11 @@ export {
 } from "./state.js";
 export type { Ticket } from "./ticket.js";
 export { MAX_TIEBREAK, type TiebreakStats, tiebreak } from "./tiebreak.js";
+export {
+  GITHUB_GRAPHQL_ENDPOINT,
+  GitHubTrackerError,
+  type GitHubTrackerOptions,
+  githubTracker,
+  trackerFor,
+} from "./trackers/github.js";
 export type { Tracker } from "./trackers/tracker.js";
