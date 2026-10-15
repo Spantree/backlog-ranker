@@ -51,12 +51,13 @@ export {
   type JevRetryPolicy,
 } from "./jev/index.js";
 export { type Calibration, kendallTau, TRUST_MIN_TICKETS, TRUST_TAU } from "./kendall.js";
-export { ALLOWLIST_KEY, LoaderError, loadProject, type Project } from "./loader.js";
+export { ALLOWLIST_KEY, LoaderError, type LoadOptions, loadProject, type Project } from "./loader.js";
 export {
   type Criterion,
   type Gate,
   type LoadedRubric,
   loadRubric,
+  loadRubricFile,
   parseRubric,
   RUBRIC_DIR,
   type Rubric,
