@@ -10,19 +10,19 @@ import {
 
 describe("refusal brand", () => {
   test("a RefusalError is a refusal whose brand is non-enumerable", () => {
-    const err = new RefusalError("no config at .backlog-decisions/config.yaml");
+    const err = new RefusalError("no config at .backlog-ranker/config.yaml");
     expect(isRefusal(err)).toBe(true);
     expect(err.name).toBe("RefusalError");
-    expect(err.message).toBe("no config at .backlog-decisions/config.yaml");
+    expect(err.message).toBe("no config at .backlog-ranker/config.yaml");
     expect(Object.propertyIsEnumerable.call(err, REFUSAL_MARKER)).toBe(false);
     expect(JSON.stringify(err)).not.toContain("refusal");
   });
 
   test("the brand is the registry symbol, so a foreign copy still matches", () => {
-    const foreign = Object.defineProperty(new Error("other copy"), Symbol.for("backlog-decisions.refusal"), {
+    const foreign = Object.defineProperty(new Error("other copy"), Symbol.for("backlog-ranker.refusal"), {
       value: true,
     });
-    expect<symbol>(REFUSAL_MARKER).toBe(Symbol.for("backlog-decisions.refusal"));
+    expect<symbol>(REFUSAL_MARKER).toBe(Symbol.for("backlog-ranker.refusal"));
     expect(isRefusal(foreign)).toBe(true);
   });
 
@@ -44,10 +44,10 @@ describe("refusal brand", () => {
 
 describe("help-request brand", () => {
   test("a HelpRequest carries the help text as its message", () => {
-    const help = new HelpRequest("usage: backlog-decisions rank");
+    const help = new HelpRequest("usage: backlog-ranker rank");
     expect(isHelpRequest(help)).toBe(true);
-    expect(help.message).toBe("usage: backlog-decisions rank");
-    expect<symbol>(HELP_REQUEST_MARKER).toBe(Symbol.for("backlog-decisions.help-request"));
+    expect(help.message).toBe("usage: backlog-ranker rank");
+    expect<symbol>(HELP_REQUEST_MARKER).toBe(Symbol.for("backlog-ranker.help-request"));
   });
 
   test("a help request is not a refusal and vice versa", () => {

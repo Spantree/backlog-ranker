@@ -3,15 +3,15 @@
 Everything the CLI does is exported from the package root, with type declarations. The package is ESM and runs on Node 22 or later and on Bun.
 
 ```ts
-import { rankBacklog } from "backlog-decisions";
+import { rankBacklog } from "backlog-ranker";
 ```
 
 ## The project path: loadProject
 
-`loadProject(cwd, env, options?)` is the path the CLI takes. It finds the project root, reads `.backlog-decisions/config.yaml` (or `config.local.yaml`), and returns the allowlist with an engine and a tracker that are built only when you ask for them. `tracker(source)` checks the source against the allowlist itself and refuses an unlisted one before reading a token or building anything. The CLI also calls `assertAllowed` first, so an unlisted source is refused before the rubric is read; do the same if your code reads anything before building the tracker.
+`loadProject(cwd, env, options?)` is the path the CLI takes. It finds the project root, reads `.backlog-ranker/config.yaml` (or `config.local.yaml`), and returns the allowlist with an engine and a tracker that are built only when you ask for them. `tracker(source)` checks the source against the allowlist itself and refuses an unlisted one before reading a token or building anything. The CLI also calls `assertAllowed` first, so an unlisted source is refused before the rubric is read; do the same if your code reads anything before building the tracker.
 
 ```ts
-import { assertAllowed, loadProject, loadRubric, openCache, parseSource, rankBacklog } from "backlog-decisions";
+import { assertAllowed, loadProject, loadRubric, openCache, parseSource, rankBacklog } from "backlog-ranker";
 
 const project = loadProject(process.cwd(), process.env);
 const source = parseSource("github:acme/app");
@@ -37,7 +37,7 @@ console.log(result.stats.requests, "requests,", result.stats.cachedAnswers, "ans
 `createJevEngine` and `githubTracker` take their keys directly. This path has no config file and so no allowlist: deciding which repositories may be sent to the provider is up to your code.
 
 ```ts
-import { createJevEngine, githubTracker, openCache, rankBacklog } from "backlog-decisions";
+import { createJevEngine, githubTracker, openCache, rankBacklog } from "backlog-ranker";
 
 const engine = createJevEngine({
   backend: "openrouter",
@@ -61,7 +61,7 @@ console.log(ranking.ranked.map((row) => row.key));
 
 `githubTracker(options)`: `owner`, `repo`, `token`, and optionally `fetch` and `tokenEnvVar` (named in auth refusals, default `GITHUB_TOKEN`). `trackerFor(source, options)` builds the tracker for a parsed `SourceRef`.
 
-`openCache(projectRoot, engineId, model, now?)` opens `<projectRoot>/.backlog-decisions/cache/<engine>--<model>.json`. The facades flush it before they return or throw.
+`openCache(projectRoot, engineId, model, now?)` opens `<projectRoot>/.backlog-ranker/cache/<engine>--<model>.json`. The facades flush it before they return or throw.
 
 ## rankBacklog
 
@@ -72,14 +72,14 @@ Takes `rubric` (a parsed `Rubric` or a YAML file path), exactly one of `tickets`
 Takes the same options as `rankBacklog` without `tiebreak`, plus `hand`: issue keys best first, exactly as the tracker spells them (`acme/app#12`). With a tracker it reads only those issues.
 
 ```ts
-import { calibrateBacklog, type DecisionEngine, type AnswerCache, type Tracker } from "backlog-decisions";
+import { calibrateBacklog, type DecisionEngine, type AnswerCache, type Tracker } from "backlog-ranker";
 
 declare const engine: DecisionEngine;
 declare const cache: AnswerCache;
 declare const tracker: Tracker;
 
 const { calibration, tool } = await calibrateBacklog({
-  rubric: ".backlog-decisions/rubrics/impact-roi.yaml",
+  rubric: ".backlog-ranker/rubrics/impact-roi.yaml",
   tracker,
   engine,
   cache,
@@ -96,7 +96,7 @@ for (const { above, below } of calibration.disagreements) console.log(`${above} 
 Takes the options every facade shares (`DecisionRunOptions`: `rubric`, `engine`, `cache` and optionally `now`) and either `ticket` or both `tracker` and `key`. Returns the composite, per-criterion `score`, `confidence`, `lowConfidence` and per-level `probability`, per-gate `probability`, `threshold` and `triggered`, `flags` (including `truncated`, when the body was cut to fit the prompt) and `stats`. A rubric can be built in memory with `rubricSchema.parse` (or `parseRubric(yamlText, origin)`), which applies the defaults:
 
 ```ts
-import { explainTicket, rubricSchema, type AnswerCache, type DecisionEngine, type Ticket } from "backlog-decisions";
+import { explainTicket, rubricSchema, type AnswerCache, type DecisionEngine, type Ticket } from "backlog-ranker";
 
 declare const engine: DecisionEngine;
 declare const cache: AnswerCache;
@@ -131,7 +131,7 @@ for (const c of explained.criteria) console.log(c.id, c.score.toFixed(2), c.leve
 A tracker is any object that satisfies `Tracker`:
 
 ```ts
-import type { Ticket, Tracker } from "backlog-decisions";
+import type { Ticket, Tracker } from "backlog-ranker";
 
 declare function loadFromMyTracker(): Promise<Ticket[]>;
 
@@ -158,7 +158,7 @@ export const myTracker: Tracker = {
 A decision engine is any object that satisfies `DecisionEngine`: an `id` and a pinned `model` (both part of every cache key) and `decide(state, questions)`, which answers every question about one state in one call. Questions are `score` (ordered `levels`), `noul` (yes/no) or `choice` (named `options`, used by the tie-break). This one answers without a model, which is useful in tests:
 
 ```ts
-import type { DecisionAnswer, DecisionEngine } from "backlog-decisions";
+import type { DecisionAnswer, DecisionEngine } from "backlog-ranker";
 
 export const middleEngine: DecisionEngine = {
   id: "fixed",
@@ -198,7 +198,7 @@ Every error the tool expects you to fix is a `RefusalError`: a usage or config p
 Use `isRefusal(err)` rather than `instanceof`: it checks a registry symbol, so it recognises refusals from another copy of the package (a symlinked or duplicated install). `isHelpRequest(err)` does the same for the `HelpRequest` a `--help` throws.
 
 ```ts
-import { isRefusal, rankBacklog, type RankOptions } from "backlog-decisions";
+import { isRefusal, rankBacklog, type RankOptions } from "backlog-ranker";
 
 declare const options: RankOptions;
 

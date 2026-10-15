@@ -249,7 +249,7 @@ describe("trackerFor", () => {
     expect(isRefusal(err)).toBe(true);
     expect((err as Error).message).toBe(
       "linear:EVA is a Linear source, and the Linear adapter is planned but not built yet; " +
-        "backlog-decisions reads github:<owner>/<repo> sources today",
+        "backlog-ranker reads github:<owner>/<repo> sources today",
     );
   });
 });

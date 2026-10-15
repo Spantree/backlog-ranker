@@ -9,11 +9,11 @@ const tmp = (): string => mkdtempSync(join(tmpdir(), "backlog-cache-"));
 const q: DecisionQuestion = { kind: "noul", instructions: "q" };
 
 describe("openCache", () => {
-  test("one file per engine and model under .backlog-decisions/cache, schema-tagged", () => {
+  test("one file per engine and model under .backlog-ranker/cache, schema-tagged", () => {
     const root = tmp();
     const c = openCache(root, "jev", "typesafe/jev 1.14", () => new Date("2026-10-15T00:00:00Z"));
-    expect(c.path).toBe(join(root, ".backlog-decisions", "cache", "jev--typesafe_jev_1.14.json"));
-    expect(CACHE_DIR).toBe(join(".backlog-decisions", "cache"));
+    expect(c.path).toBe(join(root, ".backlog-ranker", "cache", "jev--typesafe_jev_1.14.json"));
+    expect(CACHE_DIR).toBe(join(".backlog-ranker", "cache"));
     c.put("h", q, { kind: "noul", probability: 0.3 }, "typesafe/jev-1.14-20261014");
     c.flush();
     const file = JSON.parse(readFileSync(c.path, "utf8"));

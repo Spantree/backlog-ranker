@@ -2,9 +2,9 @@
 
 A rubric is a YAML file that says what to ask about each issue and how code turns the answers into an order. The model answers one issue at a time; it never sees the other issues, never divides, counts or compares dates.
 
-Rubrics live in `.backlog-decisions/rubrics/<name>.yaml` and are passed by name: `--rubric impact-roi`. A gitignored `<name>.local.yaml` beside it replaces the committed file outright when it exists, and the run header names the file it read. `rank` also accepts a file path (anything containing a `/` or ending in `.yaml` or `.yml`); `calibrate` and `explain` take names only. A rubric name is lowercase letters, digits and dashes, at most 64 characters.
+Rubrics live in `.backlog-ranker/rubrics/<name>.yaml` and are passed by name: `--rubric impact-roi`. A gitignored `<name>.local.yaml` beside it replaces the committed file outright when it exists, and the run header names the file it read. `rank` also accepts a file path (anything containing a `/` or ending in `.yaml` or `.yml`); `calibrate` and `explain` take names only. A rubric name is lowercase letters, digits and dashes, at most 64 characters.
 
-The package ships an example at `rubrics/impact-roi.yaml` (in `node_modules/backlog-decisions/rubrics/` once installed). Copy it into your project and reword it.
+The package ships an example at `rubrics/impact-roi.yaml` (in `node_modules/backlog-ranker/rubrics/` once installed). Copy it into your project and reword it.
 
 ## Schema
 
@@ -87,7 +87,7 @@ A rubric is a guess until it agrees with you. To check it:
 3. Run:
 
    ```bash
-   backlog-decisions calibrate --rubric impact-roi --source github:acme/app --hand acme/app#12,#7,31,...
+   backlog-ranker calibrate --rubric impact-roi --source github:acme/app --hand acme/app#12,#7,31,...
    ```
 
    Keys may be written `owner/repo#N`, `#N` or `N`; all must belong to the source's repository.
@@ -100,4 +100,4 @@ A tau holds for one model version. The calibrate header names the engine and mod
 
 ## Explaining one issue
 
-`backlog-decisions explain --rubric impact-roi acme/app#42` prints one issue's level probabilities per criterion, each gate's probability against its threshold and whether it acted, and the issue's flags. It reuses the cache a `rank` filled.
+`backlog-ranker explain --rubric impact-roi acme/app#42` prints one issue's level probabilities per criterion, each gate's probability against its threshold and whether it acted, and the issue's flags. It reuses the cache a `rank` filled.

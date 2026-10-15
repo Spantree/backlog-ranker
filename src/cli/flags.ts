@@ -17,20 +17,23 @@ export function isVerb(word: string): word is Verb {
   return (VERBS as readonly string[]).includes(word);
 }
 
-export const USAGE = `usage: backlog-decisions <verb> [options]
+export const USAGE = `usage: backlog-ranker [rank] -r <rubric> -s <source> [options]
+       backlog-ranker calibrate -r <rubric> -s <source> --hand KEY,KEY,... [options]
+       backlog-ranker explain -r <rubric> <owner/repo#123> [options]
 
 verbs:
-  rank       Rank a source's open tickets against a rubric
+  rank       Rank a source's open tickets against a rubric; the default
+             when the first argument is a flag
   calibrate  Compare the tool's ranking with a hand ranking
   explain    Show one ticket's scores, gates and flags
 
-Run \`backlog-decisions <verb> --help\` for a verb's options.`;
+Run \`backlog-ranker <verb> --help\` for a verb's options.`;
 
-const RUBRIC_HELP = `  -r, --rubric <name>     Rubric under .backlog-decisions/rubrics/, or a YAML file path
+const RUBRIC_HELP = `  -r, --rubric <name>     Rubric under .backlog-ranker/rubrics/, or a YAML file path
                           (a relative path resolves against the project root)`;
 
 export const VERB_USAGE: Record<Verb, string> = {
-  rank: `usage: backlog-decisions rank --rubric <name|path> --source <spec> [options]
+  rank: `usage: backlog-ranker [rank] --rubric <name|path> --source <spec> [options]
 
 ${RUBRIC_HELP}
   -s, --source <spec>     github:owner/repo (linear:TEAM is planned)
@@ -41,7 +44,7 @@ ${RUBRIC_HELP}
       --allow-once        Admit this source for one run, never persisted
       --backend <name>    With --allow-once and no config: typesafe or openrouter
   -h, --help              This text`,
-  calibrate: `usage: backlog-decisions calibrate --rubric <name|path> --source <spec> --hand KEY,KEY,... [options]
+  calibrate: `usage: backlog-ranker calibrate --rubric <name|path> --source <spec> --hand KEY,KEY,... [options]
 
 ${RUBRIC_HELP}
   -s, --source <spec>     github:owner/repo (linear:TEAM is planned)
@@ -51,7 +54,7 @@ ${RUBRIC_HELP}
   -h, --help              This text
 
 Exits 2 when the tool's ranking is not trusted.`,
-  explain: `usage: backlog-decisions explain --rubric <name|path> <owner/repo#123> [options]
+  explain: `usage: backlog-ranker explain --rubric <name|path> <owner/repo#123> [options]
 
 ${RUBRIC_HELP}
   -j, --json              Machine-readable output

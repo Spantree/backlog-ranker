@@ -2,7 +2,7 @@
  * A rubric: what a ranking run asks about each ticket and how code turns
  * the answers into an order.
  *
- * Rubrics live in `.backlog-decisions/rubrics/`: `<name>.yaml` is
+ * Rubrics live in `.backlog-ranker/rubrics/`: `<name>.yaml` is
  * committed ranking policy, `<name>.local.yaml` is a gitignored
  * experiment. When both exist the local file replaces the committed one
  * outright, and the run says which file it read.
@@ -90,7 +90,7 @@ export type Rubric = z.infer<typeof rubricSchema>;
 export type Criterion = Rubric["criteria"][number];
 export type Gate = Rubric["gates"][number];
 
-export const RUBRIC_DIR = join(".backlog-decisions", "rubrics");
+export const RUBRIC_DIR = join(".backlog-ranker", "rubrics");
 const NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 export class RubricError extends RefusalError {
@@ -146,7 +146,7 @@ export function loadRubricFile(path: string, base: string): LoadedRubric {
   return { rubric: parseRubric(text, path), hash: rubricHash(text), path, local: false };
 }
 
-/** Resolve `--rubric <name>` against `.backlog-decisions/rubrics/`, local first. */
+/** Resolve `--rubric <name>` against `.backlog-ranker/rubrics/`, local first. */
 export function loadRubric(projectRoot: string, name: string): LoadedRubric {
   if (!NAME_RE.test(name)) {
     throw new RubricError(
@@ -170,7 +170,7 @@ export function loadRubric(projectRoot: string, name: string): LoadedRubric {
 }
 
 /** A `--rubric` value: a file path (see {@link isRubricPath}) resolved
- * against the project root, or a name under `.backlog-decisions/rubrics/`. */
+ * against the project root, or a name under `.backlog-ranker/rubrics/`. */
 export function loadRubricArg(projectRoot: string, value: string): LoadedRubric {
   return isRubricPath(value) ? loadRubricFile(value, projectRoot) : loadRubric(projectRoot, value);
 }

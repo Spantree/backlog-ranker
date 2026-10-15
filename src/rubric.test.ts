@@ -92,8 +92,8 @@ describe("loadRubric", () => {
     expect(() => loadRubric(root, "../secrets")).toThrow("--rubric takes a rubric name");
   });
 
-  test("reads rubrics from .backlog-decisions/rubrics", () => {
-    expect(RUBRIC_DIR).toBe(join(".backlog-decisions", "rubrics"));
+  test("reads rubrics from .backlog-ranker/rubrics", () => {
+    expect(RUBRIC_DIR).toBe(join(".backlog-ranker", "rubrics"));
   });
 });
 

@@ -43,7 +43,7 @@ describe("toState", () => {
       const { state, truncated } = toState(ticket("K-1", body), NOW, 2_000);
       expect(truncated).toBe(true);
       expect(stateBytes(state) + 2_000).toBeLessThanOrEqual(PROMPT_BYTE_BUDGET);
-      expect(state.body).toContain("[body truncated by backlog-decisions");
+      expect(state.body).toContain("[body truncated by backlog-ranker");
       expect(state.body).not.toContain("�");
     }
   });

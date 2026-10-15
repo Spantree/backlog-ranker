@@ -1,5 +1,5 @@
 /**
- * The project's committed policy: `.backlog-decisions/config.yaml`. It
+ * The project's committed policy: `.backlog-ranker/config.yaml`. It
  * names the sources whose tickets may leave the machine (the allowlist),
  * the backend and Jev version that receive them, and the environment
  * variables that carry each key. No secret is ever written here.
@@ -17,7 +17,7 @@ import { BACKEND_NAMES, JEV_MODELS } from "./jev/backends.js";
 import { DEFAULT_KEY_VARS } from "./keys.js";
 import { parseSource } from "./source.js";
 
-export const CONFIG_DIR = ".backlog-decisions";
+export const CONFIG_DIR = ".backlog-ranker";
 export const CONFIG_PATH = join(CONFIG_DIR, "config.yaml");
 export const LOCAL_CONFIG_PATH = join(CONFIG_DIR, "config.local.yaml");
 
@@ -70,7 +70,7 @@ export class ConfigError extends RefusalError {
   }
 }
 
-/** The nearest ancestor of `start` holding `.backlog-decisions/` or
+/** The nearest ancestor of `start` holding `.backlog-ranker/` or
  * `.git`, both markers checked per directory; `start` itself if none. */
 export function findProjectRoot(start: string): string {
   const origin = resolve(start);

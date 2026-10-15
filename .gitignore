@@ -1,8 +1,8 @@
 .envrc.local
 dist/
 node_modules/
-.backlog-decisions/cache/
-.backlog-decisions/**/*.local.yaml
+.backlog-ranker/cache/
+.backlog-ranker/**/*.local.yaml
 
 # This repo uses Bun (bun.lock); lockfiles from other package managers are accidents.
 package-lock.json

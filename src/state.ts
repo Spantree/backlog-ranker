@@ -41,7 +41,7 @@ export function ageBucket(createdAt: string, now: Date): AgeBucket {
 export const PROMPT_TOKEN_CAP = 32_000;
 export const PROMPT_BYTE_BUDGET = 30_000;
 export const TRUNCATION_NOTE =
-  "\n\n[body truncated by backlog-decisions: the rest exceeded the model's prompt cap]";
+  "\n\n[body truncated by backlog-ranker: the rest exceeded the model's prompt cap]";
 
 const encoder = new TextEncoder();
 

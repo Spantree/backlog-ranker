@@ -25,7 +25,7 @@ import { type FetchFn, plannedAdapter, tokenHint, trackerFor } from "./trackers/
 import type { Tracker } from "./trackers/tracker.js";
 
 /** Where the allowlist lives, named in the refusal. */
-export const ALLOWLIST_KEY = "sources in .backlog-decisions/config.yaml";
+export const ALLOWLIST_KEY = "sources in .backlog-ranker/config.yaml";
 
 export interface Project {
   projectRoot: string;

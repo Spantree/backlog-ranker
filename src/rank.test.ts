@@ -52,11 +52,11 @@ describe("rank", () => {
     const table = stdout();
     const lines = table.split("\n");
     const row = (key: string): string => lines.find((l) => l.includes(` ${key} `)) ?? "";
-    expect(lines[0]).toContain("backlog-decisions rank: rubric fixture-roi");
+    expect(lines[0]).toContain("backlog-ranker rank: rubric fixture-roi");
     expect(lines[0]).toContain(`(sha ${FIXTURE_HASH})`);
     expect(lines[0]).toContain("source github:kit/kit");
     expect(table).toContain("engine typesafe/jev-1.14 via openrouter");
-    expect(table).toContain(".backlog-decisions/config.yaml");
+    expect(table).toContain(".backlog-ranker/config.yaml");
     // The security gate pins the leaked-key ticket above every other.
     expect(lines.find((l) => /^1\s/.test(l))).toContain("kit/kit#1");
     expect(row("kit/kit#1")).toContain("pinned:security");
@@ -89,7 +89,7 @@ describe("rank", () => {
     expect(await rank("--rubric", "fixture", "--source", "github:other/repo")).toBe(1);
     expect(stdout()).toBe("");
     expect(stderr()).toContain("github:other/repo is not on the backlog source allowlist");
-    expect(stderr()).toContain("sources in .backlog-decisions/config.yaml");
+    expect(stderr()).toContain("sources in .backlog-ranker/config.yaml");
     expect(stderr()).toContain("No request was sent");
     expect(counts).toEqual({ github: 0, jev: 0, other: 0 });
     expect(existsSync(join(root, CACHE_DIR))).toBe(false);
@@ -128,7 +128,7 @@ describe("rank", () => {
       rubric: "fixture-roi",
       rubricPath: join(RUBRIC_DIR, "fixture.yaml"),
       rubricHash: FIXTURE_HASH,
-      configPath: ".backlog-decisions/config.yaml",
+      configPath: ".backlog-ranker/config.yaml",
       source: "github:kit/kit",
       engine: "typesafe",
       model: "jev-1.14",
@@ -193,8 +193,44 @@ describe("rank", () => {
 
   test("--help prints the verb's usage on stdout and sends nothing", async () => {
     expect(await rank("--help")).toBe(0);
-    expect(stdout()).toContain("backlog-decisions rank");
+    expect(stdout()).toContain("backlog-ranker [rank]");
     expect(stderr()).toBe("");
     expect(counts).toEqual({ github: 0, jev: 0, other: 0 });
+  });
+});
+
+describe("rank as the default verb", () => {
+  /** One cold run in its own project, so neither run sees the other's cache. */
+  async function coldRun(
+    argv: string[],
+  ): Promise<{ code: number; out: string; err: string; counts: RequestCounts }> {
+    const dir = fixtureRoot("default");
+    try {
+      const fixture = fixtureProject(dir);
+      const io = captureIo();
+      const code = await run(argv, io.io, {
+        resolve: () => fixture.project,
+        cwd: () => dir,
+        now: () => FIXTURE_NOW,
+      });
+      return { code, out: io.stdout(), err: io.stderr(), counts: fixture.counts };
+    } finally {
+      removeRoot(dir);
+    }
+  }
+
+  test("ranking without the word rank prints byte-identical output", async () => {
+    const args = ["-r", "fixture", "-s", "github:kit/kit"];
+    const explicit = await coldRun(["rank", ...args]);
+    const implicit = await coldRun(args);
+    expect(explicit.code).toBe(0);
+    expect(implicit).toEqual(explicit);
+  });
+
+  test("a mistyped verb is refused with zero requests and no cache", async () => {
+    const r = await coldRun(["explian", "-r", "fixture", "-s", "github:kit/kit"]);
+    expect(r.code).toBe(1);
+    expect(r.err).toStartWith("unknown verb `explian`");
+    expect(r.counts).toEqual({ github: 0, jev: 0, other: 0 });
   });
 });

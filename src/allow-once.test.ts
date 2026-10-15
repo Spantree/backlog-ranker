@@ -31,7 +31,7 @@ let out: string[];
 let err: string[];
 
 beforeEach(() => {
-  root = realpathSync(mkdtempSync(join(tmpdir(), "backlog-decisions-allow-once-")));
+  root = realpathSync(mkdtempSync(join(tmpdir(), "backlog-ranker-allow-once-")));
   out = [];
   err = [];
   const net = replayFetch();
@@ -61,8 +61,8 @@ const stdout = (): string => out.join("");
 const stderr = (): string => err.join("");
 
 function writeConfig(text: string): string {
-  mkdirSync(join(root, ".backlog-decisions"), { recursive: true });
-  const path = join(root, ".backlog-decisions", "config.yaml");
+  mkdirSync(join(root, ".backlog-ranker"), { recursive: true });
+  const path = join(root, ".backlog-ranker", "config.yaml");
   writeFileSync(path, text);
   return path;
 }
@@ -85,8 +85,8 @@ describe("rank --allow-once", () => {
     expect(code).toBe(0);
     expect(counts).toEqual({ github: 1, jev: 6, other: 0 });
     expect(stdout()).toContain("kit/kit#1");
-    expect(readdirSync(root)).toEqual([".backlog-decisions"]);
-    expect(readdirSync(join(root, ".backlog-decisions"))).toEqual(["cache"]);
+    expect(readdirSync(root)).toEqual([".backlog-ranker"]);
+    expect(readdirSync(join(root, ".backlog-ranker"))).toEqual(["cache"]);
   });
 
   test("with a config, admits an unlisted source for the run without touching config.yaml", async () => {
@@ -95,9 +95,9 @@ describe("rank --allow-once", () => {
     expect(await rank("-r", RUBRIC_FILE, "-s", "github:kit/kit", "--allow-once")).toBe(0);
     expect(stderr()).toContain("open issues in github:kit/kit will be sent to openrouter for this run only");
     expect(counts.github).toBe(1);
-    expect(stdout()).toContain(".backlog-decisions/config.yaml");
+    expect(stdout()).toContain(".backlog-ranker/config.yaml");
     expect(readFileSync(path).equals(before)).toBe(true);
-    expect(readdirSync(join(root, ".backlog-decisions")).sort()).toEqual(["cache", "config.yaml"]);
+    expect(readdirSync(join(root, ".backlog-ranker")).sort()).toEqual(["cache", "config.yaml"]);
   });
 
   test("with a config, --backend refuses: the committed config chooses the backend", async () => {

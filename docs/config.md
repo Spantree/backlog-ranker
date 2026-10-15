@@ -1,10 +1,10 @@
 # Config
 
-Every verb reads the project's committed policy from `.backlog-decisions/config.yaml`. It names the sources whose issues may be sent to a model provider, the provider, the pinned model version, and the environment variables that hold each key. No secret is ever written in it.
+Every verb reads the project's committed policy from `.backlog-ranker/config.yaml`. It names the sources whose issues may be sent to a model provider, the provider, the pinned model version, and the environment variables that hold each key. No secret is ever written in it.
 
 ## Project root
 
-The project root is the nearest ancestor of the working directory that holds a `.backlog-decisions/` directory or a `.git` entry; if none does, the working directory itself. Config, rubrics and the cache are all found under `<root>/.backlog-decisions/`, so the verbs work from any subdirectory.
+The project root is the nearest ancestor of the working directory that holds a `.backlog-ranker/` directory or a `.git` entry; if none does, the working directory itself. Config, rubrics and the cache are all found under `<root>/.backlog-ranker/`, so the verbs work from any subdirectory.
 
 ## Schema
 
@@ -45,11 +45,11 @@ model: jev-1.14
 
 ## Local overrides
 
-`.backlog-decisions/config.local.yaml` replaces `config.yaml` outright when it exists; the two are not merged. Rubrics work the same way: `<name>.local.yaml` replaces `<name>.yaml`. The run header names the file that was read, so an override is never silent. Keep both out of git:
+`.backlog-ranker/config.local.yaml` replaces `config.yaml` outright when it exists; the two are not merged. Rubrics work the same way: `<name>.local.yaml` replaces `<name>.yaml`. The run header names the file that was read, so an override is never silent. Keep both out of git:
 
 ```gitignore
-.backlog-decisions/cache/
-.backlog-decisions/**/*.local.yaml
+.backlog-ranker/cache/
+.backlog-ranker/**/*.local.yaml
 ```
 
 ## The allowlist and what leaves the machine
@@ -88,7 +88,7 @@ Export `TYPESAFE_API_KEY` for `backend: typesafe` or `OPENROUTER_API_KEY` for `b
 
 ## The cache
 
-Every answer is cached in `.backlog-decisions/cache/<engine>--<model>.json`, for example `typesafe--jev-1.14.json`. An entry is keyed by the SHA-256 of the issue state as sent and the hash of the question, so:
+Every answer is cached in `.backlog-ranker/cache/<engine>--<model>.json`, for example `typesafe--jev-1.14.json`. An entry is keyed by the SHA-256 of the issue state as sent and the hash of the question, so:
 
 - changing a weight, a threshold, `compose` or `confidence_floor` re-ranks from the cache with no requests;
 - rewording a level, adding a criterion or editing an issue asks only what changed;

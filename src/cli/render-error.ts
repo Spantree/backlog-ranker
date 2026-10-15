@@ -8,7 +8,7 @@ import { isRefusal } from "../errors.js";
 
 /** The hint printed when a refusal's frames were withheld: the
  * suppression must read as deliberate, and the hatch discoverable. */
-export const DEBUG_HINT = "(BACKLOG_DECISIONS_DEBUG=1 for a stack)";
+export const DEBUG_HINT = "(BACKLOG_RANKER_DEBUG=1 for a stack)";
 
 /** The debug hatch is any non-empty value. */
 export function debugFromEnv(value: string | undefined): boolean {

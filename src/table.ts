@@ -79,7 +79,7 @@ export function renderTable(opts: {
     .map((c) => `${c.id}=${c.weight}${c.direction === "cost" ? " (cost)" : ""}`)
     .join(", ");
   const lines = [
-    `backlog-decisions rank: rubric ${rubric.name} (${header.rubricPath}) (sha ${header.rubricHash}), source ${header.source}`,
+    `backlog-ranker rank: rubric ${rubric.name} (${header.rubricPath}) (sha ${header.rubricHash}), source ${header.source}`,
     `engine ${header.engine}/${header.model} via ${header.backend} (config ${header.configPath}); compose ${rubric.compose}; weights ${weights}; confidence floor ${rubric.confidence_floor.toFixed(2)}`,
     "",
   ];
@@ -129,7 +129,7 @@ export function renderExplain(opts: { header: RunHeader; result: ExplainResult }
   const { rubric } = result;
   const floor = rubric.confidence_floor;
   const lines = [
-    `backlog-decisions explain: rubric ${rubric.name} (${header.rubricPath}) (sha ${header.rubricHash}), source ${header.source}`,
+    `backlog-ranker explain: rubric ${rubric.name} (${header.rubricPath}) (sha ${header.rubricHash}), source ${header.source}`,
     `engine ${header.engine}/${header.model} via ${header.backend} (config ${header.configPath}); compose ${rubric.compose}; confidence floor ${floor.toFixed(2)}`,
     "",
     `${result.key}  ${result.title}`,
@@ -180,7 +180,7 @@ export function renderCalibrate(opts: {
   const { calibration, tool, stats } = result;
   const rows = new Map([...result.ranking.ranked, ...result.ranking.held].map((r) => [r.key, r]));
   const lines = [
-    `backlog-decisions calibrate: rubric ${result.rubric.name} (${header.rubricPath}) (sha ${header.rubricHash}), source ${header.source}, ${calibration.n} tickets`,
+    `backlog-ranker calibrate: rubric ${result.rubric.name} (${header.rubricPath}) (sha ${header.rubricHash}), source ${header.source}, ${calibration.n} tickets`,
     // A tau holds for one model version only: name it beside the number.
     `engine ${header.engine}/${header.model} via ${header.backend} (config ${header.configPath})`,
     "",

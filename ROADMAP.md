@@ -18,7 +18,7 @@ Two more facts computed in code: how many open pull requests reference the issue
 
 Tracked in #3.
 
-A documented workflow that runs `backlog-decisions rank --json` on a schedule and publishes the result as a build artifact or a job summary, read-only toward the repository like the CLI.
+A documented workflow that runs `backlog-ranker -r … -s … --json` on a schedule and publishes the result as a build artifact or a job summary, read-only toward the repository like the CLI.
 
 ## Considered and deferred
 
