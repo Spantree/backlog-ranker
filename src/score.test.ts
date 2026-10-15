@@ -58,8 +58,8 @@ function fakeEngine(
               ? { kind: "noul", probability: 0.2 }
               : {
                   kind: "choice",
-                  choice: q.options[0]!.name,
-                  probabilities: { [q.options[0]!.name]: 0.7, [q.options[1]!.name]: 0.3 },
+                  choice: q.options[0]?.name ?? "",
+                  probabilities: Object.fromEntries(q.options.map((o, i) => [o.name, i === 0 ? 0.7 : 0.3])),
                   confidence: 0.4,
                 };
       }
@@ -74,7 +74,8 @@ describe("scoreTickets", () => {
   test("one request per ticket with every question; a second run sends nothing", async () => {
     const root = tmp();
     const engine = fakeEngine();
-    const tickets = [ticket("K-1"), ticket("K-2"), ticket("K-3")];
+    const first1 = ticket("K-1");
+    const tickets = [first1, ticket("K-2"), ticket("K-3")];
     const first = await scoreTickets({
       tickets,
       rubric: RUBRIC,
@@ -83,14 +84,14 @@ describe("scoreTickets", () => {
       now: NOW,
     });
     expect(engine.calls).toHaveLength(3);
-    expect(engine.calls[0]!.ids).toEqual(["impact", "urgent"]);
+    expect(engine.calls[0]?.ids).toEqual(["impact", "urgent"]);
     expect(first.stats).toMatchObject({ tickets: 3, requests: 3, cachedAnswers: 0, askedAnswers: 6 });
     expect(first.scored.map((s) => s.key)).toEqual(["K-1", "K-2", "K-3"]);
 
     const cache = openCache(root, engine.id, engine.model);
     // Nothing was flushed yet, so a fresh open sees a cold cache…
     expect(
-      cache.get(stateHash(toState(tickets[0]!, NOW).state), { kind: "noul", instructions: "Is it urgent?" }),
+      cache.get(stateHash(toState(first1, NOW).state), { kind: "noul", instructions: "Is it urgent?" }),
     ).toBeUndefined();
   });
 
@@ -127,7 +128,7 @@ describe("scoreTickets", () => {
       now: NOW,
     });
     expect(third.stats).toMatchObject({ requests: 2, cachedAnswers: 4, askedAnswers: 2 });
-    expect(engine.calls.at(-1)!.ids).toEqual(["blocked"]);
+    expect(engine.calls.at(-1)?.ids).toEqual(["blocked"]);
   });
 
   test("an edited ticket is re-asked; another engine or model never reads this cache", async () => {

@@ -60,8 +60,8 @@ function fakeEngine(
               ? { kind: "noul", probability: 0.2 }
               : {
                   kind: "choice",
-                  choice: q.options[0]!.name,
-                  probabilities: { [q.options[0]!.name]: 0.7, [q.options[1]!.name]: 0.3 },
+                  choice: q.options[0]?.name ?? "",
+                  probabilities: Object.fromEntries(q.options.map((o, i) => [o.name, i === 0 ? 0.7 : 0.3])),
                   confidence: 0.4,
                 };
       }

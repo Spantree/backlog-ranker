@@ -51,8 +51,10 @@ function pairState(
   const shell = stateBytes({ first: { ...a, body: "" }, second: { ...b, body: "" } });
   const fitted = fitBodies([a.body, b.body], shell, reserved);
   if (fitted === null) throw new PromptBudgetError("the tie-break pair", reserved);
+  const [first, second] = fitted.bodies;
+  if (first === undefined || second === undefined) throw new Error("fitBodies lost a body of the pair");
   return {
-    state: { first: { ...a, body: fitted.bodies[0]! }, second: { ...b, body: fitted.bodies[1]! } },
+    state: { first: { ...a, body: first }, second: { ...b, body: second } },
     clipped: fitted.clipped.some(Boolean),
   };
 }
@@ -98,7 +100,12 @@ export async function tiebreak(opts: {
   const reserved = longestQuestionBytes(questions);
 
   const settle = async (a: RankedRow, b: RankedRow): Promise<void> => {
-    const { state, clipped } = pairState(opts.states.get(a.key)!, opts.states.get(b.key)!, reserved);
+    const stateA = opts.states.get(a.key);
+    const stateB = opts.states.get(b.key);
+    if (stateA === undefined || stateB === undefined) {
+      throw new Error(`the tie-break has no scored state for ${stateA === undefined ? a.key : b.key}`);
+    }
+    const { state, clipped } = pairState(stateA, stateB, reserved);
     if (clipped) stats.truncatedPairs++;
     const hash = stateHash(state);
     const missing = Object.entries(questions).filter(([, q]) => opts.cache.get(hash, q) === undefined);
@@ -106,23 +113,28 @@ export async function tiebreak(opts: {
     else {
       stats.requests++;
       const fresh = await opts.engine.decide(state, Object.fromEntries(missing));
-      for (const [id, q] of missing) opts.cache.put(hash, q, fresh.answers[id]!, fresh.servedModel);
+      for (const [id, q] of missing) {
+        const answer = fresh.answers[id];
+        if (answer === undefined)
+          throw new Error(`the ${opts.engine.id} engine returned no answer for "${id}"`);
+        opts.cache.put(hash, q, answer, fresh.servedModel);
+      }
     }
     let pFirst = 0;
     for (const q of Object.values(questions)) {
-      const answer = opts.cache.get(hash, q)!;
+      const answer = opts.cache.get(hash, q);
+      if (answer === undefined) throw new Error("a tie-break answer was not cached");
       pFirst += answer.kind === "choice" ? (answer.probabilities.first ?? 0) : 0.5;
     }
     pFirst /= 2;
-    wins.set(a.key, wins.get(a.key)! + pFirst);
-    wins.set(b.key, wins.get(b.key)! + (1 - pFirst));
+    // Every key in the slice starts at 0 wins.
+    wins.set(a.key, (wins.get(a.key) ?? 0) + pFirst);
+    wins.set(b.key, (wins.get(b.key) ?? 0) + (1 - pFirst));
   };
 
   const pairs: [RankedRow, RankedRow][] = [];
-  for (let i = 0; i < slice.length; i++) {
-    for (let j = i + 1; j < slice.length; j++) {
-      const a = slice[i]!;
-      const b = slice[j]!;
+  for (const [i, a] of slice.entries()) {
+    for (const b of slice.slice(i + 1)) {
       if (a.pinnedBy.length > 0 === b.pinnedBy.length > 0) pairs.push([a, b]);
     }
   }
@@ -131,10 +143,12 @@ export async function tiebreak(opts: {
   // DEFAULT_CONCURRENCY requests at once rather than all 45.
   await pool(pairs, opts.concurrency ?? DEFAULT_CONCURRENCY, ([a, b]) => settle(a, b));
 
-  const order = new Map(slice.map((r, i) => [r.key, i]));
-  const reordered = [...slice].sort((x, y) => {
-    const group = Number(y.pinnedBy.length > 0) - Number(x.pinnedBy.length > 0);
-    return group || wins.get(y.key)! - wins.get(x.key)! || order.get(x.key)! - order.get(y.key)!;
-  });
+  const reordered = slice
+    .map((row, order) => ({ row, order, wins: wins.get(row.key) ?? 0 }))
+    .sort((x, y) => {
+      const group = Number(y.row.pinnedBy.length > 0) - Number(x.row.pinnedBy.length > 0);
+      return group || y.wins - x.wins || x.order - y.order;
+    })
+    .map((entry) => entry.row);
   return { rows: [...reordered, ...opts.rows.slice(n)], stats };
 }

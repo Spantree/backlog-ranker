@@ -40,11 +40,12 @@ export async function pool<T>(
   limit: number,
   work: (item: T) => Promise<void>,
 ): Promise<void> {
-  let next = 0;
+  // One iterator shared by every runner: each pulls the next item.
+  const queue = items.values();
   let failure: { error: unknown } | undefined;
   const runners = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
-    while (failure === undefined && next < items.length) {
-      const item = items[next++]!;
+    for (const item of queue) {
+      if (failure !== undefined) break;
       try {
         await work(item);
       } catch (error) {
@@ -97,8 +98,11 @@ export async function scoreTickets(opts: {
       stats.askedAnswers += missing.length;
       const fresh = await opts.engine.decide(state, Object.fromEntries(missing));
       for (const [id, q] of missing) {
-        answers[id] = fresh.answers[id]!;
-        opts.cache.put(hash, q, fresh.answers[id]!, fresh.servedModel);
+        const answer = fresh.answers[id];
+        if (answer === undefined)
+          throw new Error(`the ${opts.engine.id} engine returned no answer for "${id}"`);
+        answers[id] = answer;
+        opts.cache.put(hash, q, answer, fresh.servedModel);
       }
     }
     scored.set(ticket.key, { key: ticket.key, title: ticket.title, url: ticket.url, truncated, answers });
@@ -106,5 +110,10 @@ export async function scoreTickets(opts: {
 
   stats.truncated.sort(byCodePoint);
   // Input order, not completion order, so output never depends on timing.
-  return { scored: opts.tickets.map((t) => scored.get(t.key)!), states, stats };
+  const ordered = opts.tickets.map((t) => {
+    const row = scored.get(t.key);
+    if (row === undefined) throw new Error(`${t.key} was not scored`);
+    return row;
+  });
+  return { scored: ordered, states, stats };
 }

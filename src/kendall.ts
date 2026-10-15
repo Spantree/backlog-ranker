@@ -23,18 +23,22 @@ export interface Calibration {
  */
 export function kendallTau(hand: readonly string[], tool: readonly string[]): Calibration {
   const toolPos = new Map(tool.map((k, i) => [k, i]));
-  const shared = hand.filter((k, i) => toolPos.has(k) && hand.indexOf(k) === i);
+  // The hand's keys the tool also ranked, first occurrence only, with
+  // their tool position.
+  const shared: { key: string; pos: number }[] = [];
+  hand.forEach((key, i) => {
+    const pos = toolPos.get(key);
+    if (pos !== undefined && hand.indexOf(key) === i) shared.push({ key, pos });
+  });
   let concordant = 0;
   let discordant = 0;
   const disagreements: { above: string; below: string }[] = [];
-  for (let i = 0; i < shared.length; i++) {
-    for (let j = i + 1; j < shared.length; j++) {
-      const above = shared[i]!;
-      const below = shared[j]!;
-      if (toolPos.get(above)! < toolPos.get(below)!) concordant++;
+  for (const [i, above] of shared.entries()) {
+    for (const below of shared.slice(i + 1)) {
+      if (above.pos < below.pos) concordant++;
       else {
         discordant++;
-        disagreements.push({ above, below });
+        disagreements.push({ above: above.key, below: below.key });
       }
     }
   }

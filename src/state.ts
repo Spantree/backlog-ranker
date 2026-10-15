@@ -117,8 +117,11 @@ export function toState(
   };
   const fitted = fitBodies([ticket.body], stateBytes(state), reservedBytes);
   if (fitted === null) throw new PromptBudgetError(ticket.key, reservedBytes);
-  state.body = fitted.bodies[0]!;
-  return { state, truncated: fitted.clipped[0]! };
+  const [body] = fitted.bodies;
+  const [truncated] = fitted.clipped;
+  if (body === undefined || truncated === undefined) throw new Error("fitBodies lost the ticket's body");
+  state.body = body;
+  return { state, truncated };
 }
 
 export class PromptBudgetError extends RefusalError {

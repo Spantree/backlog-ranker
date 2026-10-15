@@ -185,14 +185,15 @@ export function withWeights(rubric: Rubric, overrides: Readonly<Record<string, n
   }
   const next = {
     ...rubric,
-    criteria: rubric.criteria.map((c) =>
-      Object.hasOwn(overrides, c.id) ? { ...c, weight: overrides[c.id]! } : c,
-    ),
+    criteria: rubric.criteria.map((c) => {
+      const weight = Object.hasOwn(overrides, c.id) ? overrides[c.id] : undefined;
+      return weight === undefined ? c : { ...c, weight };
+    }),
   };
   const checked = rubricSchema.safeParse(next);
   if (!checked.success)
     throw new RubricError(
-      `the --weight overrides leave an invalid rubric: ${checked.error.issues[0]!.message}`,
+      `the --weight overrides leave an invalid rubric: ${checked.error.issues.map((i) => i.message).join("; ")}`,
     );
   return checked.data;
 }
