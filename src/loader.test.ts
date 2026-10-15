@@ -106,6 +106,15 @@ describe("loadProject", () => {
     expect(err.message).toContain(field);
   });
 
+  test("a YAML syntax error refuses with the line and column, never the file's text", () => {
+    const pasted = "sk-or-v1-0123456789abcdef";
+    writeConfig("config.yaml", `sources: []\nbackend: typesafe\nkeys:\n  github: ${pasted}: x\n`);
+    const err = refusal(() => loadProject(root, {}));
+    expect(err.message).toContain(".backlog-ranker/config.yaml is not valid YAML at line 4, column 11");
+    expect(err.message).not.toContain(pasted);
+    expect(err.message).not.toContain("github");
+  });
+
   test("walks up from a subdirectory to the directory holding .backlog-ranker/", () => {
     writeConfig("config.yaml", "sources: []\nbackend: typesafe\n");
     const deep = join(root, "packages", "a", "src");
