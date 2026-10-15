@@ -5,73 +5,44 @@
  * evie-kit's backlog CLI suite.
  */
 
-import { beforeEach, describe, expect, test } from "bun:test";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { CACHE_DIR } from "./cache.js";
-import { type CliIo, run } from "./cli.js";
-import { FIXTURE_DIR, FIXTURE_NOW, type RequestCounts, replayFetch } from "./fixtures/replay.js";
-import { createJevEngine } from "./jev/index.js";
+import { run } from "./cli.js";
+import {
+  type CapturedIo,
+  captureIo,
+  FIXTURE_HASH,
+  fixtureProject,
+  fixtureRoot,
+  removeRoot,
+} from "./fixtures/project.js";
+import { FIXTURE_NOW, type RequestCounts } from "./fixtures/replay.js";
 import type { Project } from "./loader.js";
-import { RUBRIC_DIR, rubricHash } from "./rubric.js";
-import { githubTracker } from "./trackers/github.js";
+import { RUBRIC_DIR } from "./rubric.js";
 
 let root: string;
 let counts: RequestCounts;
 let resolve: () => Project;
-let out: string[];
-let err: string[];
-
-const io: CliIo = {
-  stdout: (text) => {
-    out.push(text);
-  },
-  stderr: (text) => {
-    err.push(text);
-  },
-  env: {},
-};
-
-const FIXTURE_HASH = rubricHash(readFileSync(join(FIXTURE_DIR, "rubric.yaml"), "utf8"));
+let cap: CapturedIo;
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), "backlog-decisions-rank-"));
-  mkdirSync(join(root, RUBRIC_DIR), { recursive: true });
-  copyFileSync(join(FIXTURE_DIR, "rubric.yaml"), join(root, RUBRIC_DIR, "fixture.yaml"));
-  out = [];
-  err = [];
-  const net = replayFetch();
-  counts = net.counts;
-  resolve = () => ({
-    projectRoot: root,
-    configPath: ".backlog-decisions/config.yaml",
-    config: {
-      sources: ["github:kit/kit"],
-      backend: "openrouter",
-      keys: { github: "GITHUB_TOKEN", typesafe: "TYPESAFE_API_KEY", openrouter: "OPENROUTER_API_KEY" },
-    },
-    sources: ["github:kit/kit"],
-    allowlistKey: "sources in .backlog-decisions/config.yaml",
-    backend: "openrouter",
-    engine: () =>
-      createJevEngine({
-        backend: "openrouter",
-        apiKey: "k-test",
-        fetch: net.fetch,
-        retry: { maxRetries: 0 },
-      }),
-    tracker: (source) => {
-      if (source.kind !== "github") throw new Error("fixture tracker is GitHub only");
-      return githubTracker({ owner: source.owner, repo: source.repo, token: "t", fetch: net.fetch });
-    },
-  });
+  root = fixtureRoot("rank");
+  cap = captureIo();
+  const fixture = fixtureProject(root);
+  counts = fixture.counts;
+  resolve = () => fixture.project;
+});
+
+afterEach(() => {
+  removeRoot(root);
 });
 
 const rank = (...argv: string[]): Promise<number> =>
-  run(["rank", ...argv], io, { resolve: () => resolve(), cwd: () => root, now: () => FIXTURE_NOW });
-const stdout = (): string => out.join("");
-const stderr = (): string => err.join("");
+  run(["rank", ...argv], cap.io, { resolve: () => resolve(), cwd: () => root, now: () => FIXTURE_NOW });
+const stdout = (): string => cap.stdout();
+const stderr = (): string => cap.stderr();
 
 describe("rank", () => {
   test("prints a ranked table from recorded fixtures, with no live network", async () => {
@@ -103,7 +74,7 @@ describe("rank", () => {
   test("a re-run with changed weights asks nothing: every answer comes from the cache", async () => {
     await rank("--rubric", "fixture", "--source", "github:kit/kit");
     const before = { ...counts };
-    out.length = 0;
+    cap.clear();
     expect(
       await rank("-r", "fixture", "-s", "github:kit/kit", "--weight", "impact=3", "-w", "effort=0.5"),
     ).toBe(0);
@@ -210,7 +181,7 @@ describe("rank", () => {
   test("a relative rubric path resolves against the project root, not the working directory", async () => {
     const sub = join(root, "packages", "app");
     mkdirSync(sub, { recursive: true });
-    const code = await run(["rank", "-r", join(RUBRIC_DIR, "fixture.yaml"), "-s", "github:kit/kit"], io, {
+    const code = await run(["rank", "-r", join(RUBRIC_DIR, "fixture.yaml"), "-s", "github:kit/kit"], cap.io, {
       resolve: () => resolve(),
       cwd: () => sub,
       now: () => FIXTURE_NOW,
