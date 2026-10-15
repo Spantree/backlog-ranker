@@ -13,6 +13,7 @@ import type { FetchFn, Tracker } from "./tracker.js";
 
 export const GITHUB_GRAPHQL_ENDPOINT = "https://api.github.com/graphql";
 const PAGE_SIZE = 100;
+const DEFAULT_TIMEOUT_MS = 30_000;
 
 export interface GitHubTrackerOptions {
   owner: string;
@@ -22,6 +23,8 @@ export interface GitHubTrackerOptions {
   fetch?: FetchFn;
   /** The environment variable the token came from, named in auth refusals. */
   tokenEnvVar?: string;
+  /** Per-request timeout; 30 seconds by default. */
+  timeoutMs?: number;
 }
 
 /** Linked issues count cross-references and connections whose other end
@@ -141,8 +144,26 @@ function rateLimited(status: number, reply: HttpReply): boolean {
 const rateLimitRefusal = (operation: string) =>
   new GitHubTrackerError(`GitHub rate-limited the request while ${operation}; retry later`);
 
+const duration = (ms: number) => (ms >= 1000 && ms % 1000 === 0 ? `${ms / 1000} seconds` : `${ms} ms`);
+
+/** An aborted fetch rejects with the signal's TimeoutError; octokit wraps
+ * it as the cause of a status-500 error, or lets it through when the body
+ * read is what timed out. */
+function timedOut(err: unknown): boolean {
+  const e = err as { name?: unknown; cause?: { name?: unknown } } | null;
+  return e?.name === "TimeoutError" || e?.cause?.name === "TimeoutError";
+}
+
 /** Translates whatever octokit threw into a value-free refusal. */
-function refusalFor(err: unknown, operation: string, tokenEnvVar: string): GitHubTrackerError {
+function refusalFor(
+  err: unknown,
+  operation: string,
+  tokenEnvVar: string,
+  timeoutMs: number,
+): GitHubTrackerError {
+  if (timedOut(err)) {
+    return new GitHubTrackerError(`GitHub did not answer within ${duration(timeoutMs)} while ${operation}`);
+  }
   if (err instanceof GraphqlResponseError) {
     if (err.errors?.some((e) => (e as { type?: unknown }).type === "RATE_LIMITED")) {
       return rateLimitRefusal(operation);
@@ -200,9 +221,13 @@ function toTicket(owner: string, repo: string, node: IssueNode): Ticket {
 export function githubTracker(opts: GitHubTrackerOptions): Tracker {
   const { owner, repo } = opts;
   const tokenEnvVar = opts.tokenEnvVar ?? DEFAULT_KEY_VARS.github;
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  /** Every request gets its own deadline, covering the body read too. */
+  const timed = (input: Parameters<FetchFn>[0], init?: RequestInit) =>
+    (opts.fetch ?? globalThis.fetch)(input, { ...init, signal: AbortSignal.timeout(timeoutMs) });
   const gh = graphql.defaults({
     headers: { authorization: `token ${opts.token}` },
-    ...(opts.fetch ? { request: { fetch: opts.fetch } } : {}),
+    request: { fetch: timed },
   });
 
   /** Runs one query. `partial` may accept a GraphQL-error reply's partial
@@ -218,7 +243,7 @@ export function githubTracker(opts: GitHubTrackerOptions): Tracker {
     } catch (err) {
       const accepted = partial && err instanceof GraphqlResponseError ? partial(err) : undefined;
       if (accepted !== undefined) return accepted;
-      throw refusalFor(err, operation, tokenEnvVar);
+      throw refusalFor(err, operation, tokenEnvVar, timeoutMs);
     }
   }
 

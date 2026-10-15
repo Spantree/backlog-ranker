@@ -258,6 +258,20 @@ describe("githubTracker errors", () => {
     expect(err.message).not.toContain("secret-text");
   });
 
+  test("a request GitHub does not answer in time is aborted and refuses naming the operation", async () => {
+    let signal: AbortSignal | undefined;
+    const fetch = ((_: unknown, init?: RequestInit) => {
+      signal = init?.signal ?? undefined;
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+      });
+    }) as unknown as typeof globalThis.fetch;
+    const tracker = githubTracker({ owner: "o", repo: "r", token: "t", fetch, timeoutMs: 20 });
+    const err = await caught(tracker.issues(["o/r#1"]));
+    expect(signal?.aborted).toBe(true);
+    expect(err.message).toBe("GitHub did not answer within 20 ms while reading o/r#1");
+  });
+
   test("an unreachable GitHub refuses naming the operation", async () => {
     const fetch = (async () => {
       throw new TypeError("connect ECONNREFUSED secret-host");
