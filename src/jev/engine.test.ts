@@ -303,10 +303,47 @@ describe("transport failures", () => {
 
 describe("Bun runtime", () => {
   // @typesafe-ai/sdk 0.7.0 throws "Body already used" on Bun without the
-  // adapter's fetch wrapper; this proves a canned Response parses here.
+  // adapter's fetch wrapper (typesafe-ai/typesafe-sdk-js#20); this proves a
+  // canned Response parses here.
   test("a canned Response from an injected fetch parses under bun test", async () => {
     expect(typeof Bun).toBe("object");
     const fetch: JevFetch = async () => new Response(JSON.stringify(fixture("typesafe-response.json")));
+    const decision = await createJevEngine({ backend: "typesafe", apiKey: "k", fetch }).decide(
+      STATE,
+      QUESTIONS,
+    );
+    expect(decision.answers.is_bug).toEqual({ kind: "noul", probability: 0.95 });
+  });
+
+  test("the wrapper keeps status and headers, so error mapping still sees a 401", async () => {
+    const fetch: JevFetch = async () =>
+      new Response(JSON.stringify({ error: "nope" }), {
+        status: 401,
+        statusText: "Unauthorized",
+        headers: { "content-type": "application/json", "x-request-id": "req-1" },
+      });
+    const err = await createJevEngine({ backend: "openrouter", apiKey: "k", fetch, retry: { maxRetries: 0 } })
+      .decide(STATE, QUESTIONS)
+      .catch((e: unknown) => e);
+    expect(isRefusal(err)).toBe(true);
+    expect((err as Error).message).toContain("HTTP 401");
+    expect((err as Error).message).toContain("OPENROUTER_API_KEY");
+  });
+
+  test("a body delivered in several chunks is reassembled before the SDK reads it", async () => {
+    const text = JSON.stringify(fixture("typesafe-response.json"));
+    const encoder = new TextEncoder();
+    const fetch: JevFetch = async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            const half = Math.floor(text.length / 2);
+            controller.enqueue(encoder.encode(text.slice(0, half)));
+            controller.enqueue(encoder.encode(text.slice(half)));
+            controller.close();
+          },
+        }),
+      );
     const decision = await createJevEngine({ backend: "typesafe", apiKey: "k", fetch }).decide(
       STATE,
       QUESTIONS,

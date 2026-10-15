@@ -69,17 +69,28 @@ export class JevError extends RefusalError {
 const DEFAULT_TIMEOUT_MS = 60_000;
 
 /**
- * Bun workaround for @typesafe-ai/sdk 0.7.0: its response buffering takes
- * a reader on the original body and releases it, after which Bun refuses
- * `text()` with "Body already used" (Node tolerates it). Hiding `body` on
- * the real Response makes the SDK drain only its clone. Remove once fixed
- * upstream: https://github.com/typesafe-ai/typesafe-sdk-js
+ * Bun workaround for @typesafe-ai/sdk 0.7.0, which fails every call under
+ * Bun with "Body already used": its response buffering takes a reader on
+ * the original body and releases it, Bun then treats that body as used
+ * (oven-sh/bun#45306), and the SDK's later `text()` throws. Node tolerates
+ * it. The wrapper reads the body here and hands the SDK a fresh Response
+ * that streams those bytes from JavaScript, which Bun reads correctly; the
+ * SDK's own buffering and abort handling run unchanged on it. This is the
+ * workaround from the upstream report. Remove it once that issue is fixed:
+ * https://github.com/typesafe-ai/typesafe-sdk-js/issues/20
  */
 function bunSafeFetch(inner: JevFetch): JevFetch {
   return async (url, init) => {
     const res = await inner(url, init);
-    Object.defineProperty(res, "body", { get: () => null, configurable: true });
-    return res;
+    if (res.body === null) return res;
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes);
+        controller.close();
+      },
+    });
+    return new Response(body, { status: res.status, statusText: res.statusText, headers: res.headers });
   };
 }
 

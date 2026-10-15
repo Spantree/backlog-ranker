@@ -49,7 +49,7 @@ It runs scoring and a top-10 tie-break over the fixture issues against a cold ca
 
 ## The Bun SDK shim
 
-`@typesafe-ai/sdk` 0.7.0 buffers a response by taking a reader on the original body and releasing it; Bun then refuses `text()` with "Body already used" (Node tolerates it). `bunSafeFetch` in `src/jev/engine.ts` hides `body` on the real Response so the SDK drains only its clone. Remove it once fixed upstream: https://github.com/typesafe-ai/typesafe-sdk-js
+`@typesafe-ai/sdk` 0.7.0 fails every call under Bun with "Body already used": its response buffering takes a reader on the original body and releases it, and Bun then treats that body as used (Node tolerates it). `bunSafeFetch` in `src/jev/engine.ts` reads the body itself and hands the SDK a fresh `Response` streaming those bytes, the workaround from the upstream report. Remove it once https://github.com/typesafe-ai/typesafe-sdk-js/issues/20 is fixed.
 
 ## Agent skills
 
