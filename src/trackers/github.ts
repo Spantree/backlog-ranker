@@ -7,7 +7,7 @@
 import { GraphqlResponseError, graphql } from "@octokit/graphql";
 import { RefusalError } from "../errors.js";
 import { DEFAULT_KEY_VARS } from "../keys.js";
-import { SourceError, type SourceRef } from "../source.js";
+import { issueNumberIn, SourceError, type SourceRef } from "../source.js";
 import type { Ticket } from "../ticket.js";
 import type { Tracker } from "./tracker.js";
 
@@ -47,8 +47,6 @@ const PENDING_QUERY = `query($owner: String!, $name: String!, $after: String) {
 const ISSUE_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) { issue(number: $number) { ${ISSUE_FIELDS} } }
 }`;
-
-const KEY_RE = /^([\w.-]+)\/([\w.-]+)#([1-9]\d*)$/;
 
 interface IssueNode {
   number: number;
@@ -179,13 +177,12 @@ export function githubTracker(opts: GitHubTrackerOptions): Tracker {
       return tickets;
     },
     async issues(keys) {
-      const repoName = `${owner}/${repo}`.toLowerCase();
       const numbers: number[] = [];
       const foreign: string[] = [];
       for (const key of keys) {
-        const m = KEY_RE.exec(key);
-        if (m && `${m[1]}/${m[2]}`.toLowerCase() === repoName) numbers.push(Number(m[3]));
-        else foreign.push(key);
+        const number = issueNumberIn(key, owner, repo, { bare: false });
+        if (number === undefined) foreign.push(key);
+        else numbers.push(number);
       }
       if (foreign.length > 0) {
         throw new GitHubTrackerError(

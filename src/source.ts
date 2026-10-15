@@ -66,15 +66,57 @@ export function assertAllowed(source: SourceRef, allowlist: readonly string[], s
   );
 }
 
-const ISSUE_KEY_RE = /^([\w.-]+)\/([\w.-]+)#([1-9]\d*)$/;
+/**
+ * The one issue-key grammar: `owner/repo#N`, or a bare `#N` or `N` that a
+ * caller with a repository in hand may expand. N is a whole number from 1.
+ */
+const ISSUE_KEY_RE = /^(?:([\w.-]+)\/([\w.-]+)#|#)?([1-9]\d*)$/;
+
+export interface IssueKeyMatch {
+  /** Present only when the key names its repository. */
+  repo?: { owner: string; name: string };
+  number: number;
+}
+
+/** Match a key against the grammar; `undefined` when it is not a key. */
+export function matchIssueKey(text: string): IssueKeyMatch | undefined {
+  const m = ISSUE_KEY_RE.exec(text);
+  if (m?.[3] === undefined) return undefined;
+  const number = Number(m[3]);
+  return m[1] === undefined || m[2] === undefined
+    ? { number }
+    : { repo: { owner: m[1], name: m[2] }, number };
+}
+
+/**
+ * The issue number `text` names in `owner/repo`, or `undefined` when it is
+ * not a key or names another repository (repository names ignore case).
+ * A bare `#N` or `N` counts only when `bare` admits it.
+ */
+export function issueNumberIn(
+  text: string,
+  owner: string,
+  repo: string,
+  options: { bare: boolean },
+): number | undefined {
+  const match = matchIssueKey(text);
+  if (match === undefined) return undefined;
+  if (match.repo === undefined) return options.bare ? match.number : undefined;
+  const named = `${match.repo.owner}/${match.repo.name}`.toLowerCase();
+  return named === `${owner}/${repo}`.toLowerCase() ? match.number : undefined;
+}
 
 /** Parses an issue key `owner/repo#123` into its GitHub source and number. */
 export function parseIssueKey(key: string): { source: SourceRef; number: number; key: string } {
-  const m = ISSUE_KEY_RE.exec(key);
-  if (m?.[1] === undefined || m[2] === undefined || m[3] === undefined) {
+  const match = matchIssueKey(key);
+  if (match?.repo === undefined) {
     throw new SourceError(
       `an issue key looks like <owner>/<repo>#<number> (for example octocat/hello-world#1), not "${key}"`,
     );
   }
-  return { source: parseSource(`github:${m[1]}/${m[2]}`), number: Number(m[3]), key };
+  return {
+    source: parseSource(`github:${match.repo.owner}/${match.repo.name}`),
+    number: match.number,
+    key,
+  };
 }
