@@ -1,6 +1,6 @@
 # backlog-ranker
 
-Rank a GitHub repository's open issues by a YAML rubric you write. A decision model (TypeSafe's Jev) answers narrow questions about one issue at a time, with probabilities; code does the weighting, ROI arithmetic, pinning, holding, caching and tie-breaking. The tool never writes to GitHub, sends issue text only for sources listed in a committed allowlist, and will not call a rubric trusted until it agrees with your own hand ranking (Kendall's tau of at least 0.4 on 12 or more issues).
+Rank a GitHub repository's open issues, or a Linear team's pending issues, by a YAML rubric you write. A decision model (TypeSafe's Jev) answers narrow questions about one issue at a time, with probabilities; code does the weighting, ROI arithmetic, pinning, holding, caching and tie-breaking. The tool never writes to GitHub or Linear, sends issue text only for sources listed in a committed allowlist, and will not call a rubric trusted until it agrees with your own hand ranking (Kendall's tau of at least 0.4 on 12 or more issues).
 
 ## Install
 
@@ -32,6 +32,7 @@ Commit `.backlog-ranker/config.yaml`:
 ```yaml
 sources:
   - github:acme/app
+  - linear:ENG        # a Linear team; reads LINEAR_API_KEY
 backend: openrouter
 model: jev-1.14
 ```
@@ -40,12 +41,15 @@ Copy the example rubric to `.backlog-ranker/rubrics/impact-roi.yaml`, edit its l
 
 ```bash
 npx backlog-ranker rank --rubric impact-roi --source github:acme/app --tiebreak 5
+npx backlog-ranker rank --rubric impact-roi --source linear:ENG
 ```
+
+A Linear source ranks the team's Backlog and Todo issues unless `linear.states` names others; see [docs/config.md](docs/config.md#linear-states).
 
 ## More
 
 - [docs/rubrics.md](docs/rubrics.md): writing levels and gates, composition, weights, calibration
-- [docs/config.md](docs/config.md): config keys, local overrides, the cache, the allowlist, tokens
+- [docs/config.md](docs/config.md): config keys, Linear states, local overrides, the cache, the allowlist, tokens and keys
 - [docs/cli.md](docs/cli.md): every verb and flag, exit codes, JSON output
 - [docs/library.md](docs/library.md): using the package from TypeScript
 - [ROADMAP.md](ROADMAP.md): deferred work

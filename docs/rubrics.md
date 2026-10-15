@@ -50,7 +50,7 @@ Ask impact and effort as two separate criteria. Never ask the model for a ratio,
 - `linked_issues`: cross-references and connected events, plus sub-issues and a parent
 - `duplicates`: issues marked as duplicates of it
 
-Only the title, body and labels leave GitHub. A body that would push the request past the model's prompt budget is cut and marked, and the row is flagged `truncated`.
+Only the title, body and labels leave GitHub or Linear. A body that would push the request past the model's prompt budget is cut and marked, and the row is flagged `truncated`.
 
 ## Scores
 
@@ -82,7 +82,7 @@ Rows are ordered pinned first, then the rest, each by composite descending; ties
 
 A rubric is a guess until it agrees with you. To check it:
 
-1. Pick 12 to 15 open issues from the source.
+1. Pick 12 to 15 pending issues from the source.
 2. Rank them by hand, best first, before you look at any output from the tool. A hand ranking made after seeing the tool's order is not a calibration.
 3. Run:
 

@@ -1,15 +1,16 @@
 ---
 name: backlog-ranker
 description: >-
-  Rank a GitHub repository's open issues by criteria the user chooses:
+  Rank a GitHub repository's open issues or a Linear team's pending
+  issues by criteria the user chooses:
   turn "rank by impact and ROI" or "rank by what unblocks the launch"
   into a rubric one question at a time, calibrate it against the user's
   own hand ranking (Kendall's tau), then run `backlog-ranker rank`
   and present the table. Use when the user asks to rank, prioritize,
   order or triage a backlog or a set of issues by value, impact, effort,
   ROI or any criterion of their own, or to build, tune, calibrate or
-  explain a backlog rubric. Read-only toward GitHub: it never writes a
-  label, comment or priority back.
+  explain a backlog rubric. Read-only toward GitHub and Linear: it never
+  writes a label, comment or priority back.
 argument-hint: "[what to rank by, e.g. impact and ROI]"
 ---
 
@@ -21,7 +22,10 @@ the answers in code. The rubric is the whole design: a vague level
 makes noise, a concrete one makes a ranking. This skill builds the
 rubric with the user, proves it against their judgment, and runs it.
 
-Issue keys look like `owner/repo#123`. A source is `github:owner/repo`.
+A source is `github:owner/repo` (its open issues, keyed
+`owner/repo#123`) or `linear:TEAM` (the team's issues in the workflow
+states `linear.states` names, Backlog and Todo by default, keyed
+`TEAM-123`).
 
 ## Before anything leaves the machine
 
@@ -31,7 +35,10 @@ replaces it) and refuses any source not listed under `sources` before
 a request is sent. `backend` names the provider (`typesafe` or
 `openrouter`), `model` pins the Jev version, and `keys` names the
 environment variables that hold the keys (defaults `GITHUB_TOKEN`,
-`TYPESAFE_API_KEY`, `OPENROUTER_API_KEY`).
+`LINEAR_API_KEY`, `TYPESAFE_API_KEY`, `OPENROUTER_API_KEY`).
+`linear.states` lists the Linear state names or types to rank; a
+misspelt one is refused with the team's states listed, so fix the
+config rather than guessing.
 
 A source that is not listed is the user's decision to make in
 committed config. Never add one yourself to get a run through, and
@@ -84,6 +91,7 @@ titles in key order. Then:
 
 ```bash
 backlog-ranker calibrate --rubric <name> --source github:<owner>/<repo> --hand owner/repo#12,#7,31,...
+backlog-ranker calibrate --rubric <name> --source linear:<TEAM> --hand TEAM-12,7,31,...
 ```
 
 A rubric is trusted at Kendall's tau >= 0.4 on at least 12 issues;
@@ -95,7 +103,7 @@ re-asks only the questions whose wording changed.
 ## Run and present
 
 ```bash
-backlog-ranker rank --rubric <name> --source github:<owner>/<repo> [--weight impact=2] [--tiebreak 10] [--json]
+backlog-ranker rank --rubric <name> --source <github:owner/repo|linear:TEAM> [--weight impact=2] [--tiebreak 10] [--json]
 ```
 
 Every row shows each criterion's score (a probability-weighted level
@@ -111,7 +119,7 @@ orders.
 To show why one issue landed where it did:
 
 ```bash
-backlog-ranker explain --rubric <name> owner/repo#123
+backlog-ranker explain --rubric <name> <owner/repo#123|TEAM-123>
 ```
 
 It prints each criterion's level probabilities and each gate's margin,
@@ -119,7 +127,7 @@ from the cache when a rank already asked.
 
 ## What this skill never does
 
-- Write anything back to GitHub. Moving a ranking into labels,
+- Write anything back to GitHub or Linear. Moving a ranking into labels,
   milestones or project fields is a separate, confirmed step outside
   this skill.
 - Rank a source the allowlist does not list, add a source to the

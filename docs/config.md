@@ -1,6 +1,6 @@
 # Config
 
-Every verb reads the project's committed policy from `.backlog-ranker/config.yaml`. It names the sources whose issues may be sent to a model provider, the provider, the pinned model version, and the environment variables that hold each key. No secret is ever written in it.
+Every verb reads the project's committed policy from `.backlog-ranker/config.yaml`. It names the sources whose issues may be sent to a model provider, the provider, the pinned model version, the environment variables that hold each key, and which Linear workflow states are ranked. No secret is ever written in it.
 
 ## Project root
 
@@ -11,24 +11,29 @@ The project root is the nearest ancestor of the working directory that holds a `
 ```yaml
 sources:
   - github:acme/app
-  - github:acme/api
+  - linear:ENG
 backend: openrouter
 model: jev-1.14
 keys:
   github: GITHUB_TOKEN
+  linear: LINEAR_API_KEY
   typesafe: TYPESAFE_API_KEY
   openrouter: OPENROUTER_API_KEY
+linear:
+  states: [Backlog, Todo]
 ```
 
 | Key | Required | Default | Meaning |
 | --- | --- | --- | --- |
-| `sources` | yes | | The allowlist: `github:<owner>/<repo>` entries. `linear:<TEAM>` parses but the Linear adapter is not built yet |
+| `sources` | yes | | The allowlist: `github:<owner>/<repo>` and `linear:<TEAM>` entries (`TEAM` is the Linear team key, as in `ENG-123`) |
 | `backend` | yes | | `typesafe` (https://api.typesafe.ai) or `openrouter` (https://openrouter.ai/api) |
 | `model` | no | `jev-1.14` | The pinned Jev version: `jev-1.13` or `jev-1.14` |
-| `keys` | no | all three defaults | Environment variable names, never values |
+| `keys` | no | all four defaults | Environment variable names, never values |
 | `keys.github` | no | `GITHUB_TOKEN` | Read for the GitHub token |
+| `keys.linear` | no | `LINEAR_API_KEY` | Read for the Linear API key |
 | `keys.typesafe` | no | `TYPESAFE_API_KEY` | Read when `backend: typesafe` |
 | `keys.openrouter` | no | `OPENROUTER_API_KEY` | Read when `backend: openrouter` |
+| `linear.states` | no | `[backlog, unstarted]` | The Linear workflow states whose issues are ranked, for every `linear:` source; see [Linear states](#linear-states) |
 
 Unknown keys are refused at every level. A `keys` value must look like an environment variable name (`^[A-Za-z_][A-Za-z0-9_]*$`), so a pasted key is refused rather than committed.
 
@@ -43,6 +48,21 @@ backend: typesafe   # or openrouter
 model: jev-1.14
 ```
 
+## Linear states
+
+A GitHub source ranks every open issue. A Linear source ranks the issues of its team that are in the workflow states `linear.states` lists. Each entry matches a state by its name as Linear shows it (`Backlog`, `Todo`, `In Review`) or by its type (`triage`, `backlog`, `unstarted`, `started`, `completed`, `canceled`), ignoring case; names and types may be mixed.
+
+```yaml
+sources:
+  - linear:ENG
+linear:
+  states: [Backlog, Todo]
+```
+
+Without `linear.states`, every state of type `backlog` or `unstarted` is ranked, which on Linear's default workflow is Backlog and Todo, and still holds when a team renames them. Triage, started, completed and canceled issues are left out. Naming a `started`, `completed` or `canceled` state is allowed, but ranking work that is in progress or finished is usually not what you want.
+
+Each run first reads the team's workflow states. An entry that matches none of them refuses before any issue is read, naming the entry and listing the team's states with their types, so a typo never silently ranks nothing. An empty list, or one that is not a list, is refused when the config is read. Issues in other states are never requested. `calibrate --hand` and `explain` read the issues they name in any state, so a calibration set may include issues that have since moved on.
+
 ## Local overrides
 
 `.backlog-ranker/config.local.yaml` replaces `config.yaml` outright when it exists; the two are not merged. Rubrics work the same way: `<name>.local.yaml` replaces `<name>.yaml`. The run header names the file that was read, so an override is never silent. Keep both out of git:
@@ -54,18 +74,19 @@ model: jev-1.14
 
 ## The allowlist and what leaves the machine
 
-Before reading a rubric, building a tracker or sending any request, every verb checks the source against `sources`. Matching ignores case. An unlisted source is refused with the config key and the sources that are listed, and nothing is sent. Adding a source is a committed config change, so the decision to send a repository's issues to a provider is reviewed like any other change.
+Before reading a rubric, building a tracker or sending any request, every verb checks the source against `sources`. Matching ignores case. An unlisted source is refused with the config key and the sources that are listed, and nothing is sent. Adding a source is a committed config change, so the decision to send a repository's or a team's issues to a provider is reviewed like any other change.
 
 For an allowed source:
 
 - To GitHub (https://api.github.com/graphql): read-only GraphQL queries, authenticated with the token. Nothing is ever written.
-- To the backend: per issue, its title, body, sorted labels and four facts computed locally (age bucket, reaction count, linked issue count, duplicate count). Comments and the text of linked issues are never read or sent. A body that would exceed the prompt budget is cut and marked.
+- To Linear (https://api.linear.app/graphql): read-only GraphQL queries, authenticated with the API key: the team's workflow states, then its issues in the ranked states, a page of 100 at a time, or one issue per named key. Nothing is ever written.
+- To the backend: per issue, its title, body (a Linear issue's description), sorted labels and four facts computed locally (age bucket, reaction count, linked issue count, duplicate count). On Linear, linked issues are the issue's relations in either direction, and duplicates are those of type `duplicate`. Comments and the text of linked issues are never read or sent. A body that would exceed the prompt budget is cut and marked.
 
 `rank --allow-once` admits the `--source` it is given for that one run, prints a line on stderr naming the source and the backend that will receive its issues, and writes nothing to config. With a config file it adds the source to the listed ones and the config's backend receives the issues; `--backend` is refused there, because the committed config chooses the backend. Without a config file `--backend` is required, `model` is the default and every key variable is its default name. `calibrate` and `explain` have no `--allow-once`.
 
 ## Keys
 
-Keys are read after the allowlist check passes: the GitHub token from the variable `keys.github` names, and the engine key from the variable `keys.<backend>` names. An unset or empty variable refuses with its name.
+Keys are read after the allowlist check passes: the GitHub token from the variable `keys.github` names, the Linear API key from the variable `keys.linear` names, and the engine key from the variable `keys.<backend>` names. An unset or empty variable refuses with its name.
 
 ### A GitHub token
 
@@ -81,6 +102,12 @@ export GITHUB_TOKEN=$(gh auth token)
 Or create a fine-grained personal access token at https://github.com/settings/personal-access-tokens with access to the repositories you rank and the repository permission **Issues: Read-only**, and export it as `GITHUB_TOKEN` (or the variable `keys.github` names).
 
 A rejected token (HTTP 401 or 403) refuses with the same instructions. Error messages name the operation and HTTP status, never the token or any text from the reply.
+
+### A Linear API key
+
+Create a personal API key at https://linear.app/settings/account/security and export it as `LINEAR_API_KEY` (or the variable `keys.linear` names). It is sent as the `authorization` header as is, with no `Bearer` prefix. The key reads what its owner can read, so the owner must be able to see the teams you rank. OAuth and other Linear tokens are not supported.
+
+A rejected key (HTTP 401 or 403, or Linear's authentication error) refuses naming the variable and where to create a key. Error messages name the operation and the HTTP status, or for a reply of an unexpected shape the path of the first mismatching field, never the key or any text from the reply.
 
 ### A model provider key
 

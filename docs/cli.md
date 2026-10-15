@@ -4,7 +4,7 @@
 usage: backlog-ranker <verb> [options]
 
 verbs:
-  rank       Rank a source's open tickets against a rubric
+  rank       Rank a source's pending tickets against a rubric
   calibrate  Compare the tool's ranking with a hand ranking
   explain    Show one ticket's scores, gates and flags
 
@@ -20,7 +20,7 @@ usage: backlog-ranker rank --rubric <name|path> --source <spec> [options]
 
   -r, --rubric <name>     Rubric under .backlog-ranker/rubrics/, or a YAML file path
                           (a relative path resolves against the project root)
-  -s, --source <spec>     github:owner/repo (linear:TEAM is planned)
+  -s, --source <spec>     github:owner/repo or linear:TEAM
   -w, --weight <id=n>     Override a criterion weight; repeatable
   -t, --tiebreak <n>      Pairwise tie-break depth
       --concurrency <n>   Parallel engine requests
@@ -28,10 +28,16 @@ usage: backlog-ranker rank --rubric <name|path> --source <spec> [options]
       --allow-once        Admit this source for one run, never persisted
       --backend <name>    With --allow-once and no config: typesafe or openrouter
   -h, --help              This text
+
+github:owner/repo ranks the repository's open issues, keyed owner/repo#123.
+linear:TEAM ranks the team's issues in the states linear.states names (Backlog
+and Todo by default), keyed TEAM-123, with the key in LINEAR_API_KEY by default.
 ```
 
-Ranks every open issue of the source (pull requests are never included) and prints a table: one row per issue with its composite, each criterion's score and confidence, each gate's probability against its threshold, and its flags. Issues held by a `flag_if_below` gate are listed below the ranking.
+Ranks every pending issue of the source and prints a table: one row per issue with its composite, each criterion's score and confidence, each gate's probability against its threshold, and its flags. Issues held by a `flag_if_below` gate are listed below the ranking.
 
+- A `github:<owner>/<repo>` source ranks every open issue of the repository (pull requests are never included); keys look like `acme/app#42`.
+- A `linear:<TEAM>` source ranks the team's issues in the workflow states `linear.states` names, Backlog and Todo by default (see [config.md](config.md#linear-states)); keys are Linear identifiers such as `ENG-42`. The team key is case-insensitive and printed uppercase.
 - `--rubric` takes a name, resolved as `.backlog-ranker/rubrics/<name>.local.yaml` then `<name>.yaml`, or a file path (contains `/` or ends in `.yaml`/`.yml`). A relative path resolves against the project root (the nearest directory holding `.backlog-ranker/` or `.git`), or the working directory when there is none. `calibrate` and `explain` take `--rubric` the same way.
 - `--weight <criterion>=<number>` may repeat; the last value for a criterion wins. It never sends a new request.
 - `--tiebreak` takes 1 to 10. Asks pairwise questions over the top rows; see [rubrics.md](rubrics.md#tie-break).
@@ -40,6 +46,7 @@ Ranks every open issue of the source (pull requests are never included) and prin
 
 ```bash
 backlog-ranker rank -r impact-roi -s github:acme/app -w impact=2 -t 5
+backlog-ranker rank -r impact-roi -s linear:ENG
 ```
 
 ## calibrate
@@ -49,8 +56,9 @@ usage: backlog-ranker calibrate --rubric <name|path> --source <spec> --hand KEY,
 
   -r, --rubric <name>     Rubric under .backlog-ranker/rubrics/, or a YAML file path
                           (a relative path resolves against the project root)
-  -s, --source <spec>     github:owner/repo (linear:TEAM is planned)
-      --hand <keys>       Hand ranking, best first, comma separated
+  -s, --source <spec>     github:owner/repo or linear:TEAM
+      --hand <keys>       Hand ranking, best first, comma separated: owner/repo#123
+                          or TEAM-123 keys, or bare 123 within the source
   -w, --weight <id=n>     Override a criterion weight; repeatable
   -j, --json              Machine-readable output
   -h, --help              This text
@@ -60,29 +68,33 @@ Exits 2 when the tool's ranking is not trusted.
 
 Scores the hand-ranked issues, orders them as `rank` would (held issues after every kept one) and prints both orders side by side with Kendall's tau. When the rubric is not trusted (tau under 0.4, or fewer than 12 issues), it lists the pairs the rubric orders against the hand ranking and exits 2.
 
-`--hand` keys may be written `owner/repo#N`, `#N` or `N`. Keys from another repository, a repeated key, or fewer than two keys are refused before any request.
+`--hand` keys may be written `owner/repo#N` for a GitHub source or `TEAM-N` for a Linear one, or `#N` or `N`, which expand to the source's repository or team. Keys from another repository or team, a repeated key, or fewer than two keys are refused before any request. The named issues are read in any state, so a calibration set may include issues that have since been closed or moved on.
 
 ```bash
 backlog-ranker calibrate -r impact-roi -s github:acme/app --hand '#12,#7,#31,#4,#18,#2,#40,#9,#22,#15,#3,#27'
+backlog-ranker calibrate -r impact-roi -s linear:ENG --hand ENG-12,ENG-7,31,4,18,2,40,9,22,15,3,27
 ```
 
 ## explain
 
 ```text
-usage: backlog-ranker explain --rubric <name|path> <owner/repo#123> [options]
+usage: backlog-ranker explain --rubric <name|path> <owner/repo#123|TEAM-123> [options]
 
   -r, --rubric <name>     Rubric under .backlog-ranker/rubrics/, or a YAML file path
                           (a relative path resolves against the project root)
   -j, --json              Machine-readable output
   -h, --help              This text
 
-Decision-model answers come from the cache after a rank; one GitHub lookup reads the issue.
+The key names its source: owner/repo#123 is github:owner/repo, TEAM-123 is
+linear:TEAM; either must be on the allowlist. Decision-model answers come from
+the cache after a rank; one tracker lookup reads the issue, in any state.
 ```
 
-Prints one issue's composite, each criterion's per-level probabilities, score and confidence, each gate's probability against its threshold and whether it pinned or held the issue, and its flags. The source is the key's repository, which must be on the allowlist, and the header names it. Decision-model answers come from the cache after a rank; one GitHub lookup reads the issue. Without cached answers, one decision-model request is sent.
+Prints one issue's composite, each criterion's per-level probabilities, score and confidence, each gate's probability against its threshold and whether it pinned or held the issue, and its flags. The source is the key's repository (`acme/app#42` is `github:acme/app`) or Linear team (`ENG-42` is `linear:ENG`), which must be on the allowlist, and the header names it. Decision-model answers come from the cache after a rank; one GitHub or Linear lookup reads the issue. Without cached answers, one decision-model request is sent.
 
 ```bash
 backlog-ranker explain -r impact-roi acme/app#42
+backlog-ranker explain -r impact-roi ENG-42
 ```
 
 ## Exit codes
@@ -90,7 +102,7 @@ backlog-ranker explain -r impact-roi acme/app#42
 | Code | Meaning |
 | --- | --- |
 | 0 | Success, or `--help` (printed on stdout) |
-| 1 | A refusal or an error: usage, config, allowlist, missing key, GitHub or backend failure. Printed on stderr |
+| 1 | A refusal or an error: usage, config, allowlist, missing key, GitHub, Linear or backend failure. Printed on stderr |
 | 2 | `calibrate` only: the rubric is not trusted |
 
 ## Errors and BACKLOG_RANKER_DEBUG
