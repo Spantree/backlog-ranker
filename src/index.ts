@@ -3,6 +3,12 @@ export {
   type CalibrateOptions,
   type CalibrateResult,
   calibrateBacklog,
+  type ExplainedCriterion,
+  type ExplainedGate,
+  type ExplainedLevel,
+  type ExplainOptions,
+  type ExplainResult,
+  explainTicket,
   type RankOptions,
   type RankResult,
   rankBacklog,
@@ -66,7 +72,7 @@ export {
   withWeights,
 } from "./rubric.js";
 export { DEFAULT_CONCURRENCY, longestQuestionBytes, pool, type ScoreStats, scoreTickets } from "./score.js";
-export { assertAllowed, parseSource, SourceError, type SourceRef } from "./source.js";
+export { assertAllowed, parseIssueKey, parseSource, SourceError, type SourceRef } from "./source.js";
 export {
   AGE_BUCKETS,
   type AgeBucket,
@@ -86,7 +92,7 @@ export {
   toState,
   utf8Bytes,
 } from "./state.js";
-export { type RunHeader, renderTable } from "./table.js";
+export { type RunHeader, renderExplain, renderTable } from "./table.js";
 export type { Ticket } from "./ticket.js";
 export { MAX_TIEBREAK, type TiebreakStats, tiebreak } from "./tiebreak.js";
 export {
