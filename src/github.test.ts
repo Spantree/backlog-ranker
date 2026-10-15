@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { isRefusal } from "./errors.js";
-import { GITHUB_GRAPHQL_ENDPOINT, githubTracker } from "./trackers/github.js";
+import { parseSource } from "./source.js";
+import { GITHUB_GRAPHQL_ENDPOINT, githubTracker, trackerFor } from "./trackers/github.js";
 
 type Body = { query: string; variables: Record<string, unknown> };
 
@@ -221,5 +222,34 @@ describe("githubTracker issues()", () => {
       githubTracker({ owner: "kit", repo: "kit", token: "t", fetch: gh.fetch }).issues(["kit/kit#9"]),
     );
     expect(err.message).toBe("GitHub answered HTTP 500 while reading kit/kit#9");
+  });
+});
+
+describe("trackerFor", () => {
+  test("builds the GitHub tracker for a github source", async () => {
+    const gh = fakeGitHub(() =>
+      Response.json({
+        data: {
+          repository: { issues: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [issue(1)] } },
+        },
+      }),
+    );
+    const tracker = trackerFor(parseSource("github:Kit/Kit"), { token: "t", fetch: gh.fetch });
+    expect(tracker.source).toBe("github:kit/kit");
+    expect((await tracker.pending()).map((t) => t.key)).toEqual(["Kit/Kit#1"]);
+  });
+
+  test("refuses a linear source as a planned adapter", () => {
+    let err: unknown;
+    try {
+      trackerFor(parseSource("linear:EVA"), { token: "t" });
+    } catch (e) {
+      err = e;
+    }
+    expect(isRefusal(err)).toBe(true);
+    expect((err as Error).message).toBe(
+      "linear:EVA is a Linear source, and the Linear adapter is planned but not built yet; " +
+        "backlog-decisions reads github:<owner>/<repo> sources today",
+    );
   });
 });

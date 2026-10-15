@@ -6,6 +6,7 @@
 
 import { GraphqlResponseError, graphql } from "@octokit/graphql";
 import { RefusalError } from "../errors.js";
+import { SourceError, type SourceRef } from "../source.js";
 import type { Ticket } from "../ticket.js";
 import type { Tracker } from "./tracker.js";
 
@@ -203,4 +204,16 @@ export function githubTracker(opts: GitHubTrackerOptions): Tracker {
       return tickets;
     },
   };
+}
+
+/** The tracker for a parsed source. GitHub is the one adapter today; a
+ * `linear:` source parses but refuses as a planned adapter. */
+export function trackerFor(source: SourceRef, opts: Omit<GitHubTrackerOptions, "owner" | "repo">): Tracker {
+  if (source.kind === "linear") {
+    throw new SourceError(
+      `${source.spec} is a Linear source, and the Linear adapter is planned but not built yet; ` +
+        "backlog-decisions reads github:<owner>/<repo> sources today",
+    );
+  }
+  return githubTracker({ ...opts, owner: source.owner, repo: source.repo });
 }
