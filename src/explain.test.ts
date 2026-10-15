@@ -48,7 +48,7 @@ describe("explain", () => {
   test("cold, prints one ticket's reasoning after exactly one engine request", async () => {
     expect(await explain("--rubric", "fixture", "kit/kit#1")).toBe(0);
     expect(stderr()).toBe("");
-    expect(counts).toEqual({ github: 1, jev: 1, other: 0 });
+    expect(counts).toEqual({ github: 1, linear: 0, jev: 1, other: 0 });
     const text = stdout();
     expect(text.split("\n")[0]).toContain(`(sha ${FIXTURE_HASH}), source github:kit/kit`);
     expect(text).toContain("engine typesafe/jev-1.14 via openrouter");
@@ -145,7 +145,7 @@ describe("explain", () => {
       // A refusal prints its message first, with no class-name prefix.
       expect(stderr()).toStartWith("an issue key looks like");
       expect(stderr()).toContain("<owner>/<repo>#<number>");
-      expect(counts).toEqual({ github: 0, jev: 0, other: 0 });
+      expect(counts).toEqual({ github: 0, linear: 0, jev: 0, other: 0 });
     },
   );
 
@@ -154,13 +154,13 @@ describe("explain", () => {
     expect(stdout()).toBe("");
     expect(stderr()).toContain("github:other/repo is not on the backlog source allowlist");
     expect(stderr()).toContain("No request was sent");
-    expect(counts).toEqual({ github: 0, jev: 0, other: 0 });
+    expect(counts).toEqual({ github: 0, linear: 0, jev: 0, other: 0 });
     expect(existsSync(join(root, CACHE_DIR))).toBe(false);
   });
 
   test("a key's repository matches the allowlist whatever its case", async () => {
     expect(await explain("--rubric", "fixture", "Kit/KIT#1")).toBe(0);
-    expect(counts).toEqual({ github: 1, jev: 1, other: 0 });
+    expect(counts).toEqual({ github: 1, linear: 0, jev: 1, other: 0 });
   });
 
   test.each([
@@ -170,6 +170,6 @@ describe("explain", () => {
   ])("usage error %j refuses, sending nothing", async (argv, message) => {
     expect(await explain(...argv)).toBe(1);
     expect(stderr()).toContain(message);
-    expect(counts).toEqual({ github: 0, jev: 0, other: 0 });
+    expect(counts).toEqual({ github: 0, linear: 0, jev: 0, other: 0 });
   });
 });

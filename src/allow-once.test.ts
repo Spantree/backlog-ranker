@@ -83,7 +83,7 @@ describe("rank --allow-once", () => {
         "for this run only; nothing is saved to config\n",
     );
     expect(code).toBe(0);
-    expect(counts).toEqual({ github: 1, jev: 6, other: 0 });
+    expect(counts).toEqual({ github: 1, linear: 0, jev: 6, other: 0 });
     expect(stdout()).toContain("kit/kit#1");
     expect(readdirSync(root)).toEqual([".backlog-ranker"]);
     expect(readdirSync(join(root, ".backlog-ranker"))).toEqual(["cache"]);
@@ -109,7 +109,7 @@ describe("rank --allow-once", () => {
     expect(stderr()).toContain("the committed config chooses the backend");
     expect(stderr()).toContain("--backend only applies with --allow-once when no config exists");
     expect(stdout()).toBe("");
-    expect(counts).toEqual({ github: 0, jev: 0, other: 0 });
+    expect(counts).toEqual({ github: 0, linear: 0, jev: 0, other: 0 });
     expect(readFileSync(path).equals(before)).toBe(true);
   });
 
@@ -118,7 +118,7 @@ describe("rank --allow-once", () => {
     expect(await rank("-r", RUBRIC_FILE, "-s", "github:kit/kit", "--backend", "openrouter")).toBe(1);
     expect(stderr()).toContain("--backend is accepted only with --allow-once");
     expect(stdout()).toBe("");
-    expect(counts).toEqual({ github: 0, jev: 0, other: 0 });
+    expect(counts).toEqual({ github: 0, linear: 0, jev: 0, other: 0 });
   });
 
   test("an unknown --backend refuses naming both backends", async () => {
@@ -126,13 +126,13 @@ describe("rank --allow-once", () => {
       1,
     );
     expect(stderr()).toContain('--backend takes typesafe or openrouter, not "acme"');
-    expect(counts).toEqual({ github: 0, jev: 0, other: 0 });
+    expect(counts).toEqual({ github: 0, linear: 0, jev: 0, other: 0 });
   });
 
   test("--allow-once with no config and no --backend refuses, writing nothing", async () => {
     expect(await rank("-r", RUBRIC_FILE, "-s", "github:kit/kit", "--allow-once")).toBe(1);
     expect(stderr()).toContain("--backend is required with --allow-once when no config exists");
-    expect(counts).toEqual({ github: 0, jev: 0, other: 0 });
+    expect(counts).toEqual({ github: 0, linear: 0, jev: 0, other: 0 });
     expect(readdirSync(root)).toEqual([]);
   });
 
@@ -150,6 +150,6 @@ describe("rank --allow-once", () => {
       await rank("-r", "./nope.yaml", "-s", "github:kit/kit", "--allow-once", "--backend", "openrouter"),
     ).toBe(1);
     expect(stderr()).toContain("no rubric file ./nope.yaml");
-    expect(counts).toEqual({ github: 0, jev: 0, other: 0 });
+    expect(counts).toEqual({ github: 0, linear: 0, jev: 0, other: 0 });
   });
 });

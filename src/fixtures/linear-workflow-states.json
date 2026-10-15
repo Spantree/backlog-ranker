@@ -1,0 +1,43 @@
+{
+  "data": {
+    "workflowStates": {
+      "nodes": [
+        {
+          "id": "st-triage",
+          "name": "Triage",
+          "type": "triage"
+        },
+        {
+          "id": "st-backlog",
+          "name": "Backlog",
+          "type": "backlog"
+        },
+        {
+          "id": "st-todo",
+          "name": "Todo",
+          "type": "unstarted"
+        },
+        {
+          "id": "st-progress",
+          "name": "In Progress",
+          "type": "started"
+        },
+        {
+          "id": "st-review",
+          "name": "In Review",
+          "type": "started"
+        },
+        {
+          "id": "st-done",
+          "name": "Done",
+          "type": "completed"
+        },
+        {
+          "id": "st-canceled",
+          "name": "Canceled",
+          "type": "canceled"
+        }
+      ]
+    }
+  }
+}

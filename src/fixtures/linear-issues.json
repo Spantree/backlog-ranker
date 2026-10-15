@@ -1,0 +1,274 @@
+{
+  "data": {
+    "issues": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": null
+      },
+      "nodes": [
+        {
+          "identifier": "KIT-1",
+          "title": "Executor launches print the API key into the pane",
+          "description": "Every executor launch exports the project's API key on the command line it types into the terminal pane, so the key sits in scrollback and in any screen recording. It should reach the process through the environment file instead. Done when no launch types a credential value into a pane.",
+          "url": "https://linear.example/KIT-1",
+          "createdAt": "2026-09-01T12:00:00.000Z",
+          "labels": {
+            "nodes": [
+              {
+                "name": "Bug"
+              },
+              {
+                "name": "security"
+              }
+            ]
+          },
+          "reactions": [
+            {
+              "id": "r1"
+            },
+            {
+              "id": "r2"
+            }
+          ],
+          "relations": {
+            "nodes": [
+              {
+                "type": "related"
+              }
+            ]
+          },
+          "inverseRelations": {
+            "nodes": []
+          },
+          "state": {
+            "id": "st-todo",
+            "name": "Todo",
+            "type": "unstarted"
+          }
+        },
+        {
+          "identifier": "KIT-2",
+          "title": "Fix a typo in the README install section",
+          "description": "The README says `bun instal` instead of `bun install` in the install section. Done when the command is spelled correctly.",
+          "url": "https://linear.example/KIT-2",
+          "createdAt": "2026-10-10T12:00:00.000Z",
+          "labels": {
+            "nodes": [
+              {
+                "name": "Docs"
+              }
+            ]
+          },
+          "reactions": [],
+          "relations": {
+            "nodes": []
+          },
+          "inverseRelations": {
+            "nodes": []
+          },
+          "state": {
+            "id": "st-backlog",
+            "name": "Backlog",
+            "type": "backlog"
+          }
+        },
+        {
+          "identifier": "KIT-3",
+          "title": "Lint gate crashes on every goal that renames a file",
+          "description": "`lint gate` throws a TypeError whenever the change set contains a renamed file, which most refactoring goals do. The goal cannot lock until someone patches the gate by hand. The rename path in the diff reader reads the old path from the wrong field. Done when a rename passes through the gate and a test covers it.",
+          "url": "https://linear.example/KIT-3",
+          "createdAt": "2026-09-20T12:00:00.000Z",
+          "labels": {
+            "nodes": [
+              {
+                "name": "Bug"
+              }
+            ]
+          },
+          "reactions": [
+            {
+              "id": "r3"
+            }
+          ],
+          "relations": {
+            "nodes": []
+          },
+          "inverseRelations": {
+            "nodes": [
+              {
+                "type": "duplicate"
+              }
+            ]
+          },
+          "state": {
+            "id": "st-todo",
+            "name": "Todo",
+            "type": "unstarted"
+          }
+        },
+        {
+          "identifier": "KIT-4",
+          "title": "Add a federated query layer over every tracker",
+          "description": "Build a new service that federates Linear, GitHub, Jira and Notion behind one query language, with its own schema registry, a caching tier and a permissions model, so every verb reads issues through it. Needs design decisions on hosting, auth and the query language before any code.",
+          "url": "https://linear.example/KIT-4",
+          "createdAt": "2026-08-15T12:00:00.000Z",
+          "labels": {
+            "nodes": [
+              {
+                "name": "Feature"
+              }
+            ]
+          },
+          "reactions": [],
+          "relations": {
+            "nodes": []
+          },
+          "inverseRelations": {
+            "nodes": []
+          },
+          "state": {
+            "id": "st-backlog",
+            "name": "Backlog",
+            "type": "backlog"
+          }
+        },
+        {
+          "identifier": "KIT-5",
+          "title": "Make it better",
+          "description": "",
+          "url": "https://linear.example/KIT-5",
+          "createdAt": "2026-10-01T12:00:00.000Z",
+          "labels": {
+            "nodes": []
+          },
+          "reactions": [],
+          "relations": {
+            "nodes": []
+          },
+          "inverseRelations": {
+            "nodes": []
+          },
+          "state": {
+            "id": "st-backlog",
+            "name": "Backlog",
+            "type": "backlog"
+          }
+        },
+        {
+          "identifier": "KIT-6",
+          "title": "Print the elapsed time after a timing run",
+          "description": "`goals timing run` records the duration but prints nothing when the command ends, so the user opens the log to see how long it took. Print one line with the elapsed time. Done when the line prints and a test pins its shape.",
+          "url": "https://linear.example/KIT-6",
+          "createdAt": "2026-10-05T12:00:00.000Z",
+          "labels": {
+            "nodes": [
+              {
+                "name": "Feature"
+              }
+            ]
+          },
+          "reactions": [],
+          "relations": {
+            "nodes": []
+          },
+          "inverseRelations": {
+            "nodes": []
+          },
+          "state": {
+            "id": "st-todo",
+            "name": "Todo",
+            "type": "unstarted"
+          }
+        },
+        {
+          "identifier": "KIT-7",
+          "title": "Stream executor logs to the dashboard",
+          "description": "Executor output only reaches the pane. Stream it to the dashboard as well. Done when a running goal's log shows live in the dashboard.",
+          "url": "https://linear.example/KIT-7",
+          "createdAt": "2026-09-25T12:00:00.000Z",
+          "labels": {
+            "nodes": []
+          },
+          "reactions": [],
+          "relations": {
+            "nodes": []
+          },
+          "inverseRelations": {
+            "nodes": []
+          },
+          "state": {
+            "id": "st-progress",
+            "name": "In Progress",
+            "type": "started"
+          }
+        },
+        {
+          "identifier": "KIT-8",
+          "title": "Retry a failed lock once before giving up",
+          "description": "A goal lock that fails on a transient error gives up at once. Retry it once after a short wait. Done when a transient lock failure recovers on its own.",
+          "url": "https://linear.example/KIT-8",
+          "createdAt": "2026-09-28T12:00:00.000Z",
+          "labels": {
+            "nodes": []
+          },
+          "reactions": [],
+          "relations": {
+            "nodes": []
+          },
+          "inverseRelations": {
+            "nodes": []
+          },
+          "state": {
+            "id": "st-review",
+            "name": "In Review",
+            "type": "started"
+          }
+        },
+        {
+          "identifier": "KIT-9",
+          "title": "Rename the config directory",
+          "description": "The config directory moved to its new name. Done when every reader uses it.",
+          "url": "https://linear.example/KIT-9",
+          "createdAt": "2026-08-01T12:00:00.000Z",
+          "labels": {
+            "nodes": []
+          },
+          "reactions": [],
+          "relations": {
+            "nodes": []
+          },
+          "inverseRelations": {
+            "nodes": []
+          },
+          "state": {
+            "id": "st-done",
+            "name": "Done",
+            "type": "completed"
+          }
+        },
+        {
+          "identifier": "KIT-10",
+          "title": "Someone reported a slow start",
+          "description": "A user says startup feels slow. Not yet looked at.",
+          "url": "https://linear.example/KIT-10",
+          "createdAt": "2026-10-12T12:00:00.000Z",
+          "labels": {
+            "nodes": []
+          },
+          "reactions": [],
+          "relations": {
+            "nodes": []
+          },
+          "inverseRelations": {
+            "nodes": []
+          },
+          "state": {
+            "id": "st-triage",
+            "name": "Triage",
+            "type": "triage"
+          }
+        }
+      ]
+    }
+  }
+}

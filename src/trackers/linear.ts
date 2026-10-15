@@ -1,0 +1,278 @@
+/**
+ * Linear as a backlog source: one team's issues in the workflow states
+ * the config names (`linear.states`), by default every state whose TYPE
+ * is `backlog` or `unstarted` (Backlog and Todo on Linear's default
+ * workflow), so a team's renamed or extra states still count. Facts are
+ * computed here, by code, so the decision model never counts.
+ *
+ * Plain fetch against the GraphQL endpoint, and every reply is checked
+ * against a zod schema before use; the response types come from those
+ * schemas. Errors are value-free: they name the operation, the HTTP
+ * status or a field path, never the API key or any text from Linear.
+ */
+
+import { z } from "zod";
+import { RefusalError } from "../errors.js";
+import { DEFAULT_KEY_VARS } from "../keys.js";
+import { issueKeyIn, parseSource } from "../source.js";
+import type { Ticket } from "../ticket.js";
+import type { FetchFn, Tracker } from "./tracker.js";
+
+export const LINEAR_GRAPHQL_ENDPOINT = "https://api.linear.app/graphql";
+/** Where a personal API key is created, named in auth refusals. */
+export const LINEAR_KEY_URL = "https://linear.app/settings/account/security";
+/** The pending states when the config names none: matched by type. */
+export const DEFAULT_LINEAR_STATES = ["backlog", "unstarted"] as const;
+const PAGE_SIZE = 100;
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+export interface LinearTrackerOptions {
+  /** The team key, as in `linear:<TEAM>`. */
+  team: string;
+  /** A personal API key, sent as the raw `authorization` header. */
+  apiKey: string;
+  /** The environment variable the key came from, named in auth refusals. */
+  apiKeyVar?: string;
+  /** Workflow state names or types to rank, case-insensitive;
+   * {@link DEFAULT_LINEAR_STATES} when absent. */
+  states?: readonly string[];
+  /** Replaces the global fetch, for tests. */
+  fetch?: FetchFn;
+  /** Per-request timeout; 30 seconds by default. */
+  timeoutMs?: number;
+}
+
+const ISSUE_FIELDS = `identifier title description url createdAt
+  labels(first: 100) { nodes { name } }
+  reactions { id }
+  relations(first: 100) { nodes { type } }
+  inverseRelations(first: 100) { nodes { type } }`;
+
+const STATES_QUERY = `query($team: String!) {
+  workflowStates(first: 250, filter: { team: { key: { eq: $team } } }) { nodes { id name type } }
+}`;
+
+const PENDING_QUERY = `query($team: String!, $states: [ID!]!, $after: String) {
+  issues(first: ${PAGE_SIZE}, after: $after, filter: { team: { key: { eq: $team } }, state: { id: { in: $states } } }) {
+    pageInfo { hasNextPage endCursor }
+    nodes { ${ISSUE_FIELDS} }
+  }
+}`;
+
+const ISSUE_QUERY = `query($id: String!) { issue(id: $id) { ${ISSUE_FIELDS} } }`;
+
+const issueSchema = z.object({
+  identifier: z.string(),
+  title: z.string(),
+  description: z.string().nullable(),
+  url: z.string(),
+  createdAt: z.string(),
+  labels: z.object({ nodes: z.array(z.object({ name: z.string() })) }),
+  reactions: z.array(z.unknown()),
+  relations: z.object({ nodes: z.array(z.object({ type: z.string() })) }),
+  inverseRelations: z.object({ nodes: z.array(z.object({ type: z.string() })) }),
+});
+
+const statesSchema = z.object({
+  workflowStates: z.object({
+    nodes: z.array(z.object({ id: z.string(), name: z.string(), type: z.string() })),
+  }),
+});
+
+const pageSchema = z.object({
+  issues: z.object({
+    pageInfo: z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() }),
+    nodes: z.array(issueSchema),
+  }),
+});
+
+const lookupSchema = z.object({ issue: issueSchema.nullable() });
+
+/** The GraphQL envelope: only what the tracker reads of it. */
+const envelopeSchema = z.object({
+  data: z.unknown().optional(),
+  errors: z
+    .array(
+      z.object({
+        message: z.unknown().optional(),
+        extensions: z.object({ code: z.unknown().optional() }).optional(),
+      }),
+    )
+    .optional(),
+});
+
+type IssueNode = z.infer<typeof issueSchema>;
+type WorkflowState = z.infer<typeof statesSchema>["workflowStates"]["nodes"][number];
+
+/** A tracker failure. Value-free: it names the operation, the HTTP status
+ * or a field path, never the key or any text from Linear's reply. */
+export class LinearTrackerError extends RefusalError {
+  constructor(message: string) {
+    super(message);
+    this.name = "LinearTrackerError";
+  }
+}
+
+/** How to get a key, named after the variable it is read from. */
+export function linearKeyHint(apiKeyVar: string): string {
+  return `Set ${apiKeyVar} to a Linear personal API key; create one at ${LINEAR_KEY_URL}`;
+}
+
+/** Linear also reports a rejected key as a GraphQL error code. */
+const AUTH_CODES = new Set(["AUTHENTICATION_ERROR", "FORBIDDEN"]);
+
+function toTicket(node: IssueNode): Ticket {
+  const relations = [...node.relations.nodes, ...node.inverseRelations.nodes];
+  return {
+    key: node.identifier,
+    title: node.title,
+    body: node.description ?? "",
+    labels: node.labels.nodes.map((l) => l.name),
+    url: node.url,
+    createdAt: node.createdAt,
+    reactions: node.reactions.length,
+    linkedIssues: relations.length,
+    duplicates: relations.filter((r) => r.type === "duplicate").length,
+  };
+}
+
+/** The team's states each `linear.states` entry names, by name or type;
+ * refuses any entry that matches none, listing the team's states. */
+function matchStates(team: string, wanted: readonly string[], states: readonly WorkflowState[]): string[] {
+  if (states.length === 0) {
+    throw new LinearTrackerError(
+      `Linear shows no workflow states for team ${team}: the team does not exist or the key cannot read it`,
+    );
+  }
+  const ids = new Set<string>();
+  const unmatched: string[] = [];
+  for (const entry of wanted) {
+    const needle = entry.trim().toLowerCase();
+    const hits = states.filter((s) => s.name.toLowerCase() === needle || s.type.toLowerCase() === needle);
+    if (hits.length === 0) unmatched.push(entry);
+    for (const s of hits) ids.add(s.id);
+  }
+  if (unmatched.length > 0) {
+    const listed = states.map((s) => `${s.name} (${s.type})`).join(", ");
+    throw new LinearTrackerError(
+      `linear.states ${unmatched.map((e) => `"${e}"`).join(", ")} ` +
+        `${unmatched.length === 1 ? "matches" : "match"} no workflow state of team ${team}; ` +
+        `its states are ${listed}. No issue was read.`,
+    );
+  }
+  return states.filter((s) => ids.has(s.id)).map((s) => s.id);
+}
+
+export function linearTracker(opts: LinearTrackerOptions): Tracker {
+  const team = opts.team.toUpperCase();
+  const source = parseSource(`linear:${team}`);
+  const apiKeyVar = opts.apiKeyVar ?? DEFAULT_KEY_VARS.linear;
+  const wanted = opts.states ?? DEFAULT_LINEAR_STATES;
+  const fetchFn: FetchFn = opts.fetch ?? globalThis.fetch;
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  /** Runs one query and checks its data against `schema`. `missing`
+   * turns a not-found GraphQL error into data instead of a refusal. */
+  async function call<S extends z.ZodType>(
+    operation: string,
+    query: string,
+    variables: Record<string, unknown>,
+    schema: S,
+    missing?: z.infer<S>,
+  ): Promise<z.infer<S>> {
+    let res: Response;
+    try {
+      res = await fetchFn(LINEAR_GRAPHQL_ENDPOINT, {
+        method: "POST",
+        headers: { authorization: opts.apiKey, "content-type": "application/json" },
+        body: JSON.stringify({ query, variables }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch {
+      throw new LinearTrackerError(`could not reach Linear while ${operation}`);
+    }
+    const refused = () =>
+      new LinearTrackerError(
+        `Linear refused the API key while ${operation} (HTTP ${res.status}). ${linearKeyHint(apiKeyVar)}`,
+      );
+    if (res.status === 401 || res.status === 403) {
+      await res.body?.cancel();
+      throw refused();
+    }
+    const raw: unknown = await res.json().catch(() => undefined);
+    const envelope = envelopeSchema.safeParse(raw);
+    const errors = envelope.success ? (envelope.data.errors ?? []) : [];
+    if (errors.some((e) => typeof e.extensions?.code === "string" && AUTH_CODES.has(e.extensions.code))) {
+      throw refused();
+    }
+    if (
+      missing !== undefined &&
+      errors.length > 0 &&
+      errors.every((e) => typeof e.message === "string" && e.message.startsWith("Entity not found"))
+    ) {
+      return missing;
+    }
+    if (errors.length > 0) {
+      throw new LinearTrackerError(
+        `Linear answered HTTP ${res.status} with GraphQL errors while ${operation}`,
+      );
+    }
+    if (!res.ok || !envelope.success || envelope.data.data == null) {
+      throw new LinearTrackerError(`Linear answered HTTP ${res.status} while ${operation}`);
+    }
+    const parsed = schema.safeParse(envelope.data.data);
+    if (!parsed.success) {
+      const path = parsed.error.issues[0]?.path.map(String).join(".") || "(root)";
+      throw new LinearTrackerError(
+        `Linear's reply did not have the expected shape while ${operation} (at ${path})`,
+      );
+    }
+    return parsed.data;
+  }
+
+  return {
+    source: source.spec,
+    async pending() {
+      if (wanted.length === 0) {
+        throw new LinearTrackerError("linear.states lists no states, so there is nothing to rank");
+      }
+      const known = await call(`reading ${team}'s workflow states`, STATES_QUERY, { team }, statesSchema);
+      const states = matchStates(team, wanted, known.workflowStates.nodes);
+      const tickets: Ticket[] = [];
+      let after: string | null = null;
+      for (;;) {
+        const page: z.infer<typeof pageSchema> = await call(
+          `listing ${team}'s pending issues`,
+          PENDING_QUERY,
+          { team, states, after },
+          pageSchema,
+        );
+        tickets.push(...page.issues.nodes.map(toTicket));
+        if (!page.issues.pageInfo.hasNextPage || page.issues.pageInfo.endCursor === null) break;
+        after = page.issues.pageInfo.endCursor;
+      }
+      return tickets;
+    },
+    async issues(keys) {
+      const named: string[] = [];
+      const foreign: string[] = [];
+      for (const key of keys) {
+        const canonical = issueKeyIn(key, source, { bare: false });
+        if (canonical === undefined) foreign.push(key);
+        else named.push(canonical);
+      }
+      if (foreign.length > 0) {
+        throw new LinearTrackerError(
+          `${foreign.join(", ")} not in the ${team} team this source reads (keys look like ${team}-123)`,
+        );
+      }
+      const tickets: Ticket[] = [];
+      for (const key of named) {
+        const data = await call(`reading ${key}`, ISSUE_QUERY, { id: key }, lookupSchema, { issue: null });
+        if (data.issue === null) throw new LinearTrackerError(`Linear has no issue ${key}`);
+        tickets.push(toTicket(data.issue));
+      }
+      return tickets;
+    },
+  };
+}

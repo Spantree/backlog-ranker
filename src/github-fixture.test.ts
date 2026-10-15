@@ -1,62 +1,28 @@
 /**
- * The GitHub fixture page must carry exactly the titles, bodies, labels,
- * createdAt and fact counts evie-kit's Linear tracker produced from its
- * fixture, so the recorded decision-model answers (keyed by a state hash
- * that excludes the ticket key) still match.
+ * The GitHub fixture page and the Linear fixture team's pending issues
+ * must make the same tickets, keys and urls aside: the same titles,
+ * bodies, labels, createdAt and fact counts. The recorded decision-model
+ * answers are keyed by a state hash that excludes the key, so both
+ * sources replay the same recordings.
  */
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { replayFetch } from "./fixtures/replay.js";
+import type { Ticket } from "./ticket.js";
 import { githubTracker } from "./trackers/github.js";
+import { linearTracker } from "./trackers/linear.js";
 
-const read = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8");
+const sansKey = ({ key: _key, url: _url, ...rest }: Ticket) => rest;
 
-interface LinearNode {
-  identifier: string;
-  title: string;
-  description: string | null;
-  createdAt: string;
-  labels: { nodes: { name: string }[] };
-  reactions: unknown[];
-  relations: { nodes: { type: string }[] };
-  inverseRelations: { nodes: { type: string }[] };
-}
+test("the GitHub fixture page and the Linear fixture team make the same tickets", async () => {
+  const net = replayFetch();
+  const github = await githubTracker({ owner: "kit", repo: "kit", token: "t", fetch: net.fetch }).pending();
+  const linear = await linearTracker({ team: "KIT", apiKey: "k", fetch: net.fetch }).pending();
 
-/** What evie-kit's Linear tracker made of each node: every relation in
- * either direction is a linked issue; `duplicate` relations also count
- * as duplicates. */
-function linearExpectation(node: LinearNode) {
-  const relations = [...node.relations.nodes, ...node.inverseRelations.nodes];
-  return {
-    key: `kit/kit#${node.identifier.replace("KIT-", "")}`,
-    title: node.title,
-    body: node.description ?? "",
-    labels: node.labels.nodes.map((l) => l.name),
-    createdAt: node.createdAt,
-    reactions: node.reactions.length,
-    linkedIssues: relations.length,
-    duplicates: relations.filter((r) => r.type === "duplicate").length,
-  };
-}
-
-test("the GitHub fixture page maps to the same tickets the Linear fixture did", async () => {
-  const linear = JSON.parse(read("linear-pending.reference.json")) as {
-    data: { issues: { nodes: LinearNode[] } };
-  };
-  const page = read("github-issues.json");
-  let requests = 0;
-  const fetch = (async () => {
-    requests++;
-    return new Response(page, { headers: { "content-type": "application/json" } });
-  }) as unknown as typeof globalThis.fetch;
-
-  const tickets = await githubTracker({ owner: "kit", repo: "kit", token: "t", fetch }).pending();
-
-  expect(requests).toBe(1);
-  expect(tickets).toHaveLength(6);
-  expect(tickets.map(({ url: _url, ...rest }) => rest)).toEqual(
-    linear.data.issues.nodes.map(linearExpectation),
-  );
+  expect(net.counts).toEqual({ github: 1, linear: 2, jev: 0, other: 0 });
+  expect(github).toHaveLength(6);
+  expect(linear.map((t) => t.key)).toEqual(github.map((t) => t.key.replace("kit/kit#", "KIT-")));
+  expect(linear.map(sansKey)).toEqual(github.map(sansKey));
   // The facts are not all zero, so the parity above exercises the mapping.
-  expect(tickets.find((t) => t.key === "kit/kit#1")).toMatchObject({ reactions: 2, linkedIssues: 1 });
-  expect(tickets.find((t) => t.key === "kit/kit#3")).toMatchObject({ linkedIssues: 1, duplicates: 1 });
+  expect(github.find((t) => t.key === "kit/kit#1")).toMatchObject({ reactions: 2, linkedIssues: 1 });
+  expect(github.find((t) => t.key === "kit/kit#3")).toMatchObject({ linkedIssues: 1, duplicates: 1 });
 });

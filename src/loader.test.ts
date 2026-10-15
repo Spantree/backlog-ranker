@@ -60,9 +60,15 @@ describe("loadProject", () => {
     expect(project.backend).toBe("typesafe");
     expect(project.config.keys).toEqual({
       github: "GITHUB_TOKEN",
+      linear: "LINEAR_API_KEY",
       typesafe: "TYPESAFE_API_KEY",
       openrouter: "OPENROUTER_API_KEY",
     });
+  });
+
+  test("keys.linear names the Linear key variable", () => {
+    writeConfig("config.yaml", "sources: []\nbackend: typesafe\nkeys:\n  linear: KIT_LINEAR_KEY\n");
+    expect(loadProject(root, {}).config.keys.linear).toBe("KIT_LINEAR_KEY");
   });
 
   test("config.local.yaml replaces the committed config outright and is named", () => {
@@ -79,6 +85,15 @@ describe("loadProject", () => {
     ["a bad source", "sources:\n  - jira:X\nbackend: typesafe\n", "sources.0"],
     ["an unknown backend", "sources: []\nbackend: acme\n", "backend"],
     ["a floating model", "sources: []\nbackend: typesafe\nmodel: jev-latest\n", "model"],
+    ["an unknown key service", "sources: []\nbackend: typesafe\nkeys:\n  jira: JIRA_KEY\n", "keys"],
+    [
+      "linear.states not a list",
+      "sources: []\nbackend: typesafe\nlinear:\n  states: Todo\n",
+      "linear.states",
+    ],
+    ["an empty linear.states", "sources: []\nbackend: typesafe\nlinear:\n  states: []\n", "linear.states"],
+    ["a blank state", "sources: []\nbackend: typesafe\nlinear:\n  states: ['']\n", "linear.states.0"],
+    ["an unknown linear setting", "sources: []\nbackend: typesafe\nlinear:\n  team: KIT\n", "linear"],
     [
       "a key value instead of a name",
       "sources: []\nbackend: typesafe\nkeys:\n  github: ghp-abc\n",
@@ -170,10 +185,63 @@ describe("loadProject", () => {
     );
   });
 
-  test("tracker() refuses a Linear source as a planned adapter", () => {
-    writeConfig("config.yaml", "sources:\n  - linear:KIT\nbackend: typesafe\n");
-    expect(refusal(() => loadProject(root, {}).tracker(parseSource("linear:KIT"))).message).toContain(
-      "planned",
+  test("tracker() builds the Linear tracker for an allowlisted linear: source", async () => {
+    writeConfig("config.yaml", "sources:\n  - linear:kit\nbackend: typesafe\n");
+    const net = replayFetch();
+    const tracker = loadProject(root, { LINEAR_API_KEY: "k" }, { fetch: net.fetch }).tracker(
+      parseSource("linear:KIT"),
     );
+    expect(tracker.source).toBe("linear:KIT");
+    expect((await tracker.pending()).map((t) => t.key)).toEqual([
+      "KIT-1",
+      "KIT-2",
+      "KIT-3",
+      "KIT-4",
+      "KIT-5",
+      "KIT-6",
+    ]);
+    expect(net.counts).toEqual({ github: 0, linear: 2, jev: 0, other: 0 });
+  });
+
+  test("tracker() refuses an unset Linear key naming the variable the config names", () => {
+    writeConfig(
+      "config.yaml",
+      "sources:\n  - linear:KIT\nbackend: typesafe\nkeys:\n  linear: KIT_LINEAR_KEY\n",
+    );
+    const err = refusal(() =>
+      loadProject(root, { LINEAR_API_KEY: "k", GITHUB_TOKEN: "t" }).tracker(parseSource("linear:KIT")),
+    );
+    expect(err.message).toContain("KIT_LINEAR_KEY is not set");
+    expect(err.message).toContain("https://linear.app/settings/account/security");
+    expect(err.message).not.toContain("GITHUB_TOKEN");
+  });
+
+  test("a 401 from Linear names the key variable the config renamed, never the key", async () => {
+    writeConfig(
+      "config.yaml",
+      "sources:\n  - linear:KIT\nbackend: typesafe\nkeys:\n  linear: KIT_LINEAR_KEY\n",
+    );
+    const fetch = (async () => new Response("denied", { status: 401 })) as unknown as typeof globalThis.fetch;
+    const tracker = loadProject(root, { KIT_LINEAR_KEY: "lin_api_SECRET" }, { fetch }).tracker(
+      parseSource("linear:KIT"),
+    );
+    const err = await tracker.pending().then(
+      () => undefined,
+      (e: unknown) => e as Error,
+    );
+    expect(isRefusal(err)).toBe(true);
+    expect(err?.message).toContain("HTTP 401");
+    expect(err?.message).toContain("KIT_LINEAR_KEY");
+    expect(err?.message).not.toContain("lin_api_SECRET");
+    expect(err?.message).not.toContain("denied");
+  });
+
+  test("linear.states reaches the Linear tracker", async () => {
+    writeConfig("config.yaml", "sources:\n  - linear:KIT\nbackend: typesafe\nlinear:\n  states: [Todo]\n");
+    const net = replayFetch();
+    const project = loadProject(root, { LINEAR_API_KEY: "k" }, { fetch: net.fetch });
+    expect(project.config.linear).toEqual({ states: ["Todo"] });
+    const tickets = await project.tracker(parseSource("linear:KIT")).pending();
+    expect(tickets.map((t) => t.key)).toEqual(["KIT-1", "KIT-3", "KIT-6"]);
   });
 });
