@@ -1,5 +1,6 @@
 # An example ranking policy: user impact over engineering effort, a
-# security pin, and a hold for tickets too thin to judge. Copy it to
+# security pin, a hold for tickets too thin to judge, and two optional
+# fact gates on counts the tracker reports. Copy it to
 # .backlog-ranker/rubrics/impact-roi.yaml and reword the levels so each
 # one describes a situation your own tickets fall into.
 #
@@ -67,4 +68,20 @@ gates:
       like, so a reader can judge its value without asking the author?
     action: flag_if_below
     threshold: 0.5
+# Optional: rules on facts counted in code, applied without asking the
+# model, so editing them never sends a request. Delete either to turn it
+# off. A ticket blocked by an open issue sinks below every ticket that is
+# neither pinned nor sunk (a pin wins); a ticket with an open pull request
+# set to close it is already in progress and is held for a human, even
+# when pinned. Some teams also hold assigned tickets
+# (fact: assignees, at_least: 1, action: hold); see docs/rubrics.md.
+fact_gates:
+  - id: blocked
+    fact: open_blockers
+    at_least: 1
+    action: sink
+  - id: in_progress
+    fact: open_closing_prs
+    at_least: 1
+    action: hold
 tiebreak_question: Which ticket gives the project's users more value for the engineering work it takes?

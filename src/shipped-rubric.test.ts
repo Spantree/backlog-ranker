@@ -17,5 +17,10 @@ test("the shipped impact-roi rubric parses with the package's parser", () => {
     ["security", "pin_top"],
     ["judgeable", "flag_if_below"],
   ]);
+  // Optional fact gates: never one on assignees, whose meaning differs by team.
+  expect(rubric.fact_gates).toEqual([
+    { id: "blocked", fact: "open_blockers", at_least: 1, action: "sink" },
+    { id: "in_progress", fact: "open_closing_prs", at_least: 1, action: "hold" },
+  ]);
   expect(rubric.tiebreak_question).toBeString();
 });
