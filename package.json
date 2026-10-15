@@ -1,0 +1,50 @@
+{
+  "name": "backlog-decisions",
+  "version": "2026.10.15",
+  "description": "Rank, calibrate and explain a backlog with a rubric and a decision model",
+  "license": "MIT",
+  "author": "Sebastian Otaegui",
+  "type": "module",
+  "bin": {
+    "backlog-decisions": "dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "rubrics",
+    "skills",
+    "docs",
+    "!docs/agents",
+    "README.md",
+    "LICENSE",
+    "ROADMAP.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.scripts.json",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@octokit/graphql": "^9.0.5",
+    "@typesafe-ai/sdk": "^0.7.0",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
+    "@types/node": "^26.6.5",
+    "bun-types": "^1.4.3",
+    "typescript": "^7.0.2"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "state": {
+    "ticket": "My checkout page shows a blank screen after I click Pay."
+  },
+  "questions": {
+    "urgency": {
+      "type": "score",
+      "instructions": "How urgent is this ticket?",
+      "criteria": ["Can wait", "This week", "Blocking revenue now"]
+    },
+    "is_bug": {
+      "type": "noul",
+      "instructions": "Is this a software defect report?"
+    },
+    "team": {
+      "type": "choice",
+      "instructions": "Which team owns it?",
+      "criteria": {
+        "payments": "Checkout and billing",
+        "frontend": "Rendering and layout"
+      }
+    }
+  }
+}

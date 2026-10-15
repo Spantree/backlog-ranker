@@ -1,0 +1,217 @@
+# Library
+
+Everything the CLI does is exported from the package root, with type declarations. The package is ESM and runs on Node 22 or later and on Bun.
+
+```ts
+import { rankBacklog } from "backlog-decisions";
+```
+
+## The project path: loadProject
+
+`loadProject(cwd, env, options?)` is the path the CLI takes. It finds the project root, reads `.backlog-decisions/config.yaml` (or `config.local.yaml`), and returns the allowlist with an engine and a tracker that are built only when you ask for them. `tracker(source)` checks the source against the allowlist itself and refuses an unlisted one before reading a token or building anything. The CLI also calls `assertAllowed` first, so an unlisted source is refused before the rubric is read; do the same if your code reads anything before building the tracker.
+
+```ts
+import { assertAllowed, loadProject, loadRubric, openCache, parseSource, rankBacklog } from "backlog-decisions";
+
+const project = loadProject(process.cwd(), process.env);
+const source = parseSource("github:acme/app");
+assertAllowed(source, project.sources, project.allowlistKey);
+
+const { rubric } = loadRubric(project.projectRoot, "impact-roi");
+const tracker = project.tracker(source);
+const engine = project.engine();
+const cache = openCache(project.projectRoot, engine.id, engine.model);
+
+const result = await rankBacklog({ rubric, tracker, engine, cache, tiebreak: 5 });
+for (const [i, row] of result.ranking.ranked.entries()) {
+  console.log(i + 1, row.key, row.composite.toFixed(3), row.pinnedBy, row.lowConfidence);
+}
+console.log("held:", result.ranking.held.map((row) => row.key));
+console.log(result.stats.requests, "requests,", result.stats.cachedAnswers, "answers from cache");
+```
+
+`Project` carries `projectRoot`, `configPath`, `config`, `sources`, `allowlistKey`, `backend`, `engine()` and `tracker(source)`. `engine()` refuses when the backend's key variable is unset. `tracker()` refuses, in order, a source not on the allowlist (with the same wording as `assertAllowed`), a `linear:` source as not built yet, and an unset GitHub token variable. `LoadOptions` takes `allowOnce` (a `SourceRef` admitted for this project object only), `backend` and `fetch` (a replacement for the global fetch, used by tests).
+
+## Building the pieces yourself
+
+`createJevEngine` and `githubTracker` take their keys directly. This path has no config file and so no allowlist: deciding which repositories may be sent to the provider is up to your code.
+
+```ts
+import { createJevEngine, githubTracker, openCache, rankBacklog } from "backlog-decisions";
+
+const engine = createJevEngine({
+  backend: "openrouter",
+  apiKey: process.env.OPENROUTER_API_KEY ?? "",
+  model: "jev-1.14",
+});
+const tracker = githubTracker({ owner: "acme", repo: "app", token: process.env.GITHUB_TOKEN ?? "" });
+const cache = openCache(process.cwd(), engine.id, engine.model);
+
+const { ranking } = await rankBacklog({
+  rubric: "rubrics/impact-roi.yaml",
+  tracker,
+  engine,
+  cache,
+  weights: { impact: 2 },
+});
+console.log(ranking.ranked.map((row) => row.key));
+```
+
+`createJevEngine(options)`: `backend` (`"typesafe"` or `"openrouter"`), `apiKey`, and optionally `apiKeyVar` (the variable named when the backend refuses the key, default the backend's entry in `DEFAULT_KEY_VARS`), `model` (default `jev-1.14`; an unknown version refuses), `fetch`, `retry` (the SDK's retry policy, partially overridden; by default 408, 429 and 5xx are retried twice with backoff) and `timeoutMs` (per attempt, default 60000).
+
+`githubTracker(options)`: `owner`, `repo`, `token`, and optionally `fetch` and `tokenEnvVar` (named in auth refusals, default `GITHUB_TOKEN`). `trackerFor(source, options)` builds the tracker for a parsed `SourceRef`.
+
+`openCache(projectRoot, engineId, model, now?)` opens `<projectRoot>/.backlog-decisions/cache/<engine>--<model>.json`. The facades flush it before they return or throw.
+
+## rankBacklog
+
+Takes `rubric` (a parsed `Rubric` or a YAML file path), exactly one of `tickets` and `tracker`, `engine`, `cache`, and optionally `now` (the clock that buckets ages), `weights`, `concurrency` (default 8) and `tiebreak` (1 to 10). Returns `rubric` (as applied, overrides included), `ranking` (`ranked` and `held` rows), `states` (each issue's state as sent, by key), `stats`, and `tiebreak` stats when asked.
+
+## calibrateBacklog
+
+Takes the same options as `rankBacklog` without `tiebreak`, plus `hand`: issue keys best first, exactly as the tracker spells them (`acme/app#12`). With a tracker it reads only those issues.
+
+```ts
+import { calibrateBacklog, type DecisionEngine, type AnswerCache, type Tracker } from "backlog-decisions";
+
+declare const engine: DecisionEngine;
+declare const cache: AnswerCache;
+declare const tracker: Tracker;
+
+const { calibration, tool } = await calibrateBacklog({
+  rubric: ".backlog-decisions/rubrics/impact-roi.yaml",
+  tracker,
+  engine,
+  cache,
+  hand: ["acme/app#12", "acme/app#7", "acme/app#31"],
+});
+console.log(calibration.tau, calibration.trusted, tool);
+for (const { above, below } of calibration.disagreements) console.log(`${above} over ${below}`);
+```
+
+`calibration` is `{ n, concordant, discordant, tau, trusted, disagreements }`; `trusted` means `tau >= TRUST_TAU` (0.4) on at least `TRUST_MIN_TICKETS` (12) issues. The result also carries `tool` (the tool's order of the same keys, held issues last), `scored`, `ranking` and `stats`.
+
+## explainTicket
+
+Takes the options every facade shares (`DecisionRunOptions`: `rubric`, `engine`, `cache` and optionally `now`) and either `ticket` or both `tracker` and `key`. Returns the composite, per-criterion `score`, `confidence`, `lowConfidence` and per-level `probability`, per-gate `probability`, `threshold` and `triggered`, `flags` (including `truncated`, when the body was cut to fit the prompt) and `stats`. A rubric can be built in memory with `rubricSchema.parse` (or `parseRubric(yamlText, origin)`), which applies the defaults:
+
+```ts
+import { explainTicket, rubricSchema, type AnswerCache, type DecisionEngine, type Ticket } from "backlog-decisions";
+
+declare const engine: DecisionEngine;
+declare const cache: AnswerCache;
+
+const rubric = rubricSchema.parse({
+  name: "impact-roi",
+  compose: "roi",
+  criteria: [
+    { id: "impact", direction: "benefit", question: "How much does this help users?", levels: ["None", "Some", "A lot"] },
+    { id: "effort", direction: "cost", question: "How much work is it?", levels: ["An hour", "A day", "A week"] },
+  ],
+});
+
+const ticket: Ticket = {
+  key: "acme/app#42",
+  title: "Export fails on large projects",
+  body: "Exporting a project with more than 500 files times out. Done when it finishes.",
+  labels: ["bug"],
+  url: "https://github.com/acme/app/issues/42",
+  createdAt: "2026-09-01T00:00:00Z",
+  reactions: 3,
+  linkedIssues: 0,
+  duplicates: 1,
+};
+
+const explained = await explainTicket({ rubric, ticket, engine, cache });
+for (const c of explained.criteria) console.log(c.id, c.score.toFixed(2), c.levels.map((l) => l.probability));
+```
+
+## Custom trackers
+
+A tracker is any object that satisfies `Tracker`:
+
+```ts
+import type { Ticket, Tracker } from "backlog-decisions";
+
+declare function loadFromMyTracker(): Promise<Ticket[]>;
+
+export const myTracker: Tracker = {
+  source: "mytracker:team",
+  async pending() {
+    return loadFromMyTracker();
+  },
+  async issues(keys) {
+    const all = await loadFromMyTracker();
+    return keys.map((key) => {
+      const found = all.find((t) => t.key === key);
+      if (found === undefined) throw new Error(`no issue ${key}`);
+      return found;
+    });
+  },
+};
+```
+
+`pending()` returns every issue to rank; `issues(keys)` returns the named ones, for calibrate and explain. Compute `reactions`, `linkedIssues` and `duplicates` in code: they are sent as facts. Only `title`, `body` and `labels` are sent as text. The allowlist and `loadProject` know only `github:` and `linear:` sources, so a custom tracker is used through the facades directly.
+
+## Custom engines
+
+A decision engine is any object that satisfies `DecisionEngine`: an `id` and a pinned `model` (both part of every cache key) and `decide(state, questions)`, which answers every question about one state in one call. Questions are `score` (ordered `levels`), `noul` (yes/no) or `choice` (named `options`, used by the tie-break). This one answers without a model, which is useful in tests:
+
+```ts
+import type { DecisionAnswer, DecisionEngine } from "backlog-decisions";
+
+export const middleEngine: DecisionEngine = {
+  id: "fixed",
+  model: "fixed-1",
+  async decide(_state, questions) {
+    const answers: Record<string, DecisionAnswer> = {};
+    for (const [id, q] of Object.entries(questions)) {
+      if (q.kind === "score") {
+        const n = q.levels.length;
+        answers[id] = {
+          kind: "score",
+          value: (n - 1) / 2,
+          probabilities: q.levels.map(() => 1 / n),
+          confidence: 1,
+        };
+      } else if (q.kind === "noul") {
+        answers[id] = { kind: "noul", probability: 0.5 };
+      } else {
+        const p = 1 / q.options.length;
+        answers[id] = {
+          kind: "choice",
+          choice: q.options[0]?.name ?? "",
+          probabilities: Object.fromEntries(q.options.map((o) => [o.name, p])),
+          confidence: p,
+        };
+      }
+    }
+    return { servedModel: "fixed-1", answers };
+  },
+};
+```
+
+## Errors and guards
+
+Every error the tool expects you to fix is a `RefusalError`: a usage or config problem, an unlisted source, an unset key, a failed request. Subclasses name the area: `ConfigError`, `LoaderError`, `RubricError`, `SourceError`, `GitHubTrackerError`, `JevError` (with the HTTP `status` when there was one) and `PromptBudgetError`. Their messages never contain a key, a token or issue text.
+
+Use `isRefusal(err)` rather than `instanceof`: it checks a registry symbol, so it recognises refusals from another copy of the package (a symlinked or duplicated install). `isHelpRequest(err)` does the same for the `HelpRequest` a `--help` throws.
+
+```ts
+import { isRefusal, rankBacklog, type RankOptions } from "backlog-decisions";
+
+declare const options: RankOptions;
+
+try {
+  await rankBacklog(options);
+} catch (err) {
+  if (isRefusal(err)) console.error((err as Error).message);
+  else throw err;
+}
+```
+
+`run(argv, io, options?)` runs the CLI in-process and returns the exit code; `io` supplies `stdout`, `stderr` and `env`.
+
+## Building blocks
+
+Also exported: `parseRubric`, `loadRubric`, `loadRubricFile`, `withWeights`, `rubricHash`; `scoreTickets`, `pool`; `rank`, `compositeOf`, `rubricQuestions`; `tiebreak`, `MAX_TIEBREAK`; `kendallTau`; `toState`, `stateHash`, `canonicalJson` and the prompt budget helpers; `parseSource`, `parseIssueKey`, `assertAllowed`; `loadConfig`, `parseConfig`, `configSchema`, `findProjectRoot`; `BACKENDS`, `JEV_MODELS`, `DEFAULT_JEV_MODEL`; `renderTable`, `renderExplain`.

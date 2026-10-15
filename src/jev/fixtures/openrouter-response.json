@@ -1,0 +1,39 @@
+{
+  "model": "typesafe/jev-1.14-20261014",
+  "answers": {
+    "urgency": {
+      "type": "score",
+      "score": 2,
+      "legend": {
+        "0": "Can wait",
+        "1": "This week",
+        "2": "Blocking revenue now"
+      },
+      "probabilities": {
+        "0": 0,
+        "1": 0,
+        "2": 1
+      },
+      "confidence": 1
+    },
+    "is_bug": {
+      "type": "noul",
+      "noul": 0.95
+    },
+    "team": {
+      "type": "choice",
+      "choice": "payments",
+      "probabilities": {
+        "payments": 0.81,
+        "frontend": 0.19
+      },
+      "confidence": 0.62
+    }
+  },
+  "usage": {
+    "input_tokens": 382,
+    "output_tokens": 62,
+    "cost": 0.000016044
+  },
+  "provider": "TypeSafe"
+}

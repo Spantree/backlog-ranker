@@ -1,0 +1,70 @@
+# An example ranking policy: user impact over engineering effort, a
+# security pin, and a hold for tickets too thin to judge. Copy it to
+# .backlog-decisions/rubrics/impact-roi.yaml and reword the levels so each
+# one describes a situation your own tickets fall into.
+#
+# Calibrate before trusting it: hand-rank 12 to 15 tickets best first,
+# without looking at the tool's output, then run
+#   backlog-decisions calibrate --rubric impact-roi --source github:<owner>/<repo> --hand <keys>
+# A rubric is trusted at Kendall's tau >= 0.4 on 12 or more tickets. Below
+# that, reword the levels or gates behind the disagreeing pairs and re-run;
+# the cache re-asks only the questions whose wording changed. Experiment in
+# impact-roi.local.yaml, which is read instead of this file when present.
+name: impact-roi
+description: Value to the project's users over the engineering work it takes, with credential leaks pinned to the top.
+compose: roi
+confidence_floor: 0.5
+criteria:
+  - id: impact
+    direction: benefit
+    weight: 1
+    question: >-
+      This is a ticket in a software project's issue tracker. How much does
+      completing it improve the project for the people who use it?
+    levels:
+      - >-
+        Cosmetic or no change at all: wording, a printed line, a nicety nobody is
+        blocked or slowed by, or a ticket that records a decision already taken and
+        asks for no work until some later event
+      - >-
+        Removes minor friction in a rarely used feature, in a step done once per
+        machine or project (setup, installation), or in an edge case few users hit
+      - Removes recurring friction or a manual workaround in a workflow most users follow
+      - >-
+        Fixes a failure that blocks, stalls or misleads a workflow most users follow,
+        or a mistake the software lets through that damages a user's data or work
+      - Prevents a leaked secret, lost work, or silently wrong results for every user
+  - id: effort
+    direction: cost
+    weight: 1
+    question: How much engineering work does completing this ticket take, judged from the change the ticket describes?
+    levels:
+      - A wording edit in one document, or a one-line code change
+      - A small change inside one module with a test or two, or a few paragraphs added to one or two documents
+      - Changes across several modules with new tests, or a documentation pass that touches many pages
+      - A new command, a new configuration block, a new public API, or a change spanning several packages or services
+      - A new subsystem or a multi-part design that needs its own decisions
+gates:
+  - id: security
+    question: >-
+      Does this ticket report that the project's own code, run today with default
+      settings, moves a secret, credential or confidential value somewhere it should
+      not go (copies it into another process's environment, writes it into a log,
+      prints it in an output or an error message, lets it reach a commit, or sends
+      it to a third party the project has not cleared for it), and does the ticket's
+      fix stop that code path from doing so? A fix that adds a setting still counts
+      when the ticket names the code that leaks today with no setting at all. Answer
+      no when the value got out because a person typed it into a file or a message
+      and the ticket adds a scan or check to catch that: there the project's code
+      leaks nothing. Answer no for a leak already accepted and left in history, for
+      a confidentiality check that refuses too much (a false positive), and for a
+      ticket that only adds or moves settings without changing what the code exposes.
+    action: pin_top
+    threshold: 0.5
+  - id: judgeable
+    question: >-
+      Does the ticket say concretely what is wrong or missing and what done looks
+      like, so a reader can judge its value without asking the author?
+    action: flag_if_below
+    threshold: 0.5
+tiebreak_question: Which ticket gives the project's users more value for the engineering work it takes?
