@@ -8,6 +8,7 @@
         },
         "nodes": [
           {
+            "id": "I_kit_1",
             "number": 1,
             "title": "Executor launches print the API key into the pane",
             "body": "Every executor launch exports the project's API key on the command line it types into the terminal pane, so the key sits in scrollback and in any screen recording. It should reach the process through the environment file instead. Done when no launch types a credential value into a pane.",
@@ -26,17 +27,47 @@
             "reactions": {
               "totalCount": 2
             },
+            "assignees": {
+              "totalCount": 0
+            },
             "timelineItems": {
-              "nodes": []
+              "nodes": [
+                {
+                  "__typename": "CrossReferencedEvent",
+                  "source": {
+                    "__typename": "Issue",
+                    "id": "I_kit_4"
+                  }
+                },
+                {
+                  "__typename": "CrossReferencedEvent",
+                  "source": {
+                    "__typename": "PullRequest",
+                    "id": "PR_kit_10"
+                  }
+                }
+              ]
             },
             "subIssues": {
               "totalCount": 0
             },
-            "parent": {
-              "number": 4
+            "blockedBy": {
+              "nodes": [
+                {
+                  "state": "OPEN"
+                }
+              ]
+            },
+            "closedByPullRequestsReferences": {
+              "nodes": [
+                {
+                  "state": "OPEN"
+                }
+              ]
             }
           },
           {
+            "id": "I_kit_2",
             "number": 2,
             "title": "Fix a typo in the README install section",
             "body": "The README says `bun instal` instead of `bun install` in the install section. Done when the command is spelled correctly.",
@@ -52,15 +83,32 @@
             "reactions": {
               "totalCount": 0
             },
+            "assignees": {
+              "totalCount": 1
+            },
             "timelineItems": {
-              "nodes": []
+              "nodes": [
+                {
+                  "__typename": "CrossReferencedEvent",
+                  "source": {
+                    "__typename": "PullRequest",
+                    "id": "PR_kit_11"
+                  }
+                }
+              ]
             },
             "subIssues": {
               "totalCount": 0
             },
-            "parent": null
+            "blockedBy": {
+              "nodes": []
+            },
+            "closedByPullRequestsReferences": {
+              "nodes": []
+            }
           },
           {
+            "id": "I_kit_3",
             "number": 3,
             "title": "Lint gate crashes on every goal that renames a file",
             "body": "`lint gate` throws a TypeError whenever the change set contains a renamed file, which most refactoring goals do. The goal cannot lock until someone patches the gate by hand. The rename path in the diff reader reads the old path from the wrong field. Done when a rename passes through the gate and a test covers it.",
@@ -76,10 +124,17 @@
             "reactions": {
               "totalCount": 1
             },
+            "assignees": {
+              "totalCount": 0
+            },
             "timelineItems": {
               "nodes": [
                 {
-                  "__typename": "CrossReferencedEvent"
+                  "__typename": "CrossReferencedEvent",
+                  "source": {
+                    "__typename": "Issue",
+                    "id": "I_kit_6"
+                  }
                 },
                 {
                   "__typename": "MarkedAsDuplicateEvent"
@@ -89,9 +144,22 @@
             "subIssues": {
               "totalCount": 0
             },
-            "parent": null
+            "blockedBy": {
+              "nodes": [
+                {
+                  "state": "OPEN"
+                },
+                {
+                  "state": "CLOSED"
+                }
+              ]
+            },
+            "closedByPullRequestsReferences": {
+              "nodes": []
+            }
           },
           {
+            "id": "I_kit_4",
             "number": 4,
             "title": "Add a federated query layer over every tracker",
             "body": "Build a new service that federates Linear, GitHub, Jira and Notion behind one query language, with its own schema registry, a caching tier and a permissions model, so every verb reads issues through it. Needs design decisions on hosting, auth and the query language before any code.",
@@ -107,15 +175,24 @@
             "reactions": {
               "totalCount": 0
             },
+            "assignees": {
+              "totalCount": 0
+            },
             "timelineItems": {
               "nodes": []
             },
             "subIssues": {
               "totalCount": 0
             },
-            "parent": null
+            "blockedBy": {
+              "nodes": []
+            },
+            "closedByPullRequestsReferences": {
+              "nodes": []
+            }
           },
           {
+            "id": "I_kit_5",
             "number": 5,
             "title": "Make it better",
             "body": "",
@@ -127,15 +204,24 @@
             "reactions": {
               "totalCount": 0
             },
+            "assignees": {
+              "totalCount": 0
+            },
             "timelineItems": {
               "nodes": []
             },
             "subIssues": {
               "totalCount": 0
             },
-            "parent": null
+            "blockedBy": {
+              "nodes": []
+            },
+            "closedByPullRequestsReferences": {
+              "nodes": []
+            }
           },
           {
+            "id": "I_kit_6",
             "number": 6,
             "title": "Print the elapsed time after a timing run",
             "body": "`goals timing run` records the duration but prints nothing when the command ends, so the user opens the log to see how long it took. Print one line with the elapsed time. Done when the line prints and a test pins its shape.",
@@ -151,13 +237,28 @@
             "reactions": {
               "totalCount": 0
             },
+            "assignees": {
+              "totalCount": 2
+            },
             "timelineItems": {
               "nodes": []
             },
             "subIssues": {
               "totalCount": 0
             },
-            "parent": null
+            "blockedBy": {
+              "nodes": []
+            },
+            "closedByPullRequestsReferences": {
+              "nodes": [
+                {
+                  "state": "OPEN"
+                },
+                {
+                  "state": "MERGED"
+                }
+              ]
+            }
           }
         ]
       }

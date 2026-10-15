@@ -7,7 +7,10 @@ import { trackerFor } from "./trackers/index.js";
 
 type Body = { query: string; variables: Record<string, unknown> };
 
+const ref = (typename: string, id = `${typename}-x`) => ({ __typename: typename, id });
+
 const issue = (n: number, extra: Record<string, unknown> = {}): Record<string, unknown> => ({
+  id: `I_${n}`,
   number: n,
   title: `t ${n}`,
   body: "",
@@ -15,16 +18,26 @@ const issue = (n: number, extra: Record<string, unknown> = {}): Record<string, u
   createdAt: "2026-10-01T00:00:00Z",
   labels: { nodes: [{ name: "Bug" }] },
   reactions: { totalCount: 4 },
+  assignees: { totalCount: 2 },
   timelineItems: {
     nodes: [
-      { __typename: "CrossReferencedEvent" },
-      { __typename: "ConnectedEvent" },
+      { __typename: "CrossReferencedEvent", source: ref("Issue") },
+      { __typename: "ConnectedEvent", source: ref("Issue", `I_${n}`), subject: ref("Issue") },
       { __typename: "MarkedAsDuplicateEvent" },
-      { __typename: "CrossReferencedEvent" },
+      { __typename: "CrossReferencedEvent", source: ref("Issue") },
     ],
   },
   subIssues: { totalCount: 2 },
   parent: { number: 1 },
+  blockedBy: { nodes: [{ state: "OPEN" }, { state: "CLOSED" }, { state: "OPEN" }] },
+  closedByPullRequestsReferences: {
+    nodes: [
+      { state: "OPEN", isDraft: false },
+      { state: "OPEN", isDraft: true },
+      { state: "CLOSED", isDraft: false },
+      { state: "MERGED", isDraft: false },
+    ],
+  },
   ...extra,
 });
 
@@ -82,7 +95,7 @@ describe("githubTracker pending()", () => {
     expect(query).not.toContain("pullRequests");
   });
 
-  test("maps facts: reactions total, linked issues, duplicates; null body becomes empty", async () => {
+  test("maps facts: reactions, linked issues, duplicates and the gate-only counts; null body becomes empty", async () => {
     const gh = fakeGitHub(() =>
       Response.json({
         data: {
@@ -96,7 +109,7 @@ describe("githubTracker pending()", () => {
       }),
     );
     const [a, b] = await githubTracker({ owner: "o", repo: "r", token: "t", fetch: gh.fetch }).pending();
-    // 2 cross-referenced + 1 connected + 2 sub-issues + 1 parent
+    // 2 issue cross-references + 1 issue connection + 2 sub-issues; the parent does not count.
     expect(a).toEqual({
       key: "o/r#3",
       title: "t 3",
@@ -105,10 +118,69 @@ describe("githubTracker pending()", () => {
       url: "https://github.com/o/r/issues/3",
       createdAt: "2026-10-01T00:00:00Z",
       reactions: 4,
-      linkedIssues: 6,
+      linkedIssues: 5,
       duplicates: 1,
+      openBlockers: 2,
+      openClosingPrs: 2,
+      assignees: 2,
     });
     expect(b).toMatchObject({ key: "o/r#4", linkedIssues: 3, duplicates: 1 });
+  });
+
+  test("linked issues count only references and connections from issues, never pull requests", async () => {
+    const node = issue(5, {
+      subIssues: { totalCount: 0 },
+      timelineItems: {
+        nodes: [
+          { __typename: "CrossReferencedEvent", source: ref("PullRequest") },
+          { __typename: "CrossReferencedEvent", source: ref("Issue") },
+          { __typename: "ConnectedEvent", source: ref("Issue", "I_5"), subject: ref("PullRequest") },
+          { __typename: "ConnectedEvent", source: ref("PullRequest"), subject: ref("Issue", "I_5") },
+          { __typename: "ConnectedEvent", source: ref("Issue"), subject: ref("Issue", "I_5") },
+          null,
+        ],
+      },
+    });
+    const gh = fakeGitHub(() =>
+      Response.json({
+        data: {
+          repository: { issues: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [node] } },
+        },
+      }),
+    );
+    const [t] = await githubTracker({ owner: "o", repo: "r", token: "t", fetch: gh.fetch }).pending();
+    expect(t).toMatchObject({ linkedIssues: 2, duplicates: 0 });
+  });
+
+  test("gate-only counts are zero when nothing blocks, closes or is assigned", async () => {
+    const node = issue(6, {
+      assignees: { totalCount: 0 },
+      blockedBy: { nodes: [{ state: "CLOSED" }] },
+      closedByPullRequestsReferences: { nodes: [{ state: "MERGED", isDraft: false }] },
+    });
+    const gh = fakeGitHub(() =>
+      Response.json({
+        data: {
+          repository: { issues: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [node] } },
+        },
+      }),
+    );
+    const [t] = await githubTracker({ owner: "o", repo: "r", token: "t", fetch: gh.fetch }).pending();
+    expect(t).toMatchObject({ openBlockers: 0, openClosingPrs: 0, assignees: 0 });
+  });
+
+  test("asks for open closing pull requests, blockers with their state, and the assignee count", async () => {
+    const gh = fakeGitHub(() =>
+      Response.json({
+        data: { repository: { issues: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } } },
+      }),
+    );
+    await githubTracker({ owner: "o", repo: "r", token: "t", fetch: gh.fetch }).pending();
+    const query = gh.bodies[0]?.query.replace(/\s+/g, " ") ?? "";
+    expect(query).toContain("closedByPullRequestsReferences(first: 100, includeClosedPrs: false)");
+    expect(query).toContain("blockedBy(first: 100) { nodes { state } }");
+    expect(query).toContain("assignees { totalCount }");
+    expect(query).not.toContain("parent");
   });
 });
 

@@ -24,14 +24,25 @@ export interface GitHubTrackerOptions {
   tokenEnvVar?: string;
 }
 
-const ISSUE_FIELDS = `number title body url createdAt
+/** Linked issues count cross-references and connections whose other end
+ * is an issue, plus sub-issues; pull requests and the parent do not count.
+ * Blockers and closing pull requests are filtered to open ones in code:
+ * `blockedBy` takes no state argument, and closing references can be
+ * MERGED. Drafts are OPEN, so they count. */
+const ISSUE_FIELDS = `id number title body url createdAt
   labels(first: 100) { nodes { name } }
   reactions { totalCount }
+  assignees { totalCount }
   timelineItems(itemTypes: [CROSS_REFERENCED_EVENT, CONNECTED_EVENT, MARKED_AS_DUPLICATE_EVENT], first: 100) {
-    nodes { __typename }
+    nodes {
+      __typename
+      ... on CrossReferencedEvent { source { __typename ... on Node { id } } }
+      ... on ConnectedEvent { source { __typename ... on Node { id } } subject { __typename ... on Node { id } } }
+    }
   }
   subIssues { totalCount }
-  parent { number }`;
+  blockedBy(first: 100) { nodes { state } }
+  closedByPullRequestsReferences(first: 100, includeClosedPrs: false) { nodes { state } }`;
 
 const PENDING_QUERY = `query($owner: String!, $name: String!, $after: String) {
   repository(owner: $owner, name: $name) {
@@ -46,7 +57,20 @@ const ISSUE_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) { issue(number: $number) { ${ISSUE_FIELDS} } }
 }`;
 
+/** The issue or pull request at one end of a timeline reference. */
+interface Subject {
+  __typename: string;
+  id?: string;
+}
+
+interface TimelineNode {
+  __typename: string;
+  source?: Subject | null;
+  subject?: Subject | null;
+}
+
 interface IssueNode {
+  id: string;
   number: number;
   title: string;
   body: string | null;
@@ -54,9 +78,11 @@ interface IssueNode {
   createdAt: string;
   labels: { nodes: { name: string }[] };
   reactions: { totalCount: number };
-  timelineItems: { nodes: ({ __typename: string } | null)[] };
+  assignees: { totalCount: number };
+  timelineItems: { nodes: (TimelineNode | null)[] };
   subIssues: { totalCount: number };
-  parent: { number: number } | null;
+  blockedBy: { nodes: ({ state: string } | null)[] };
+  closedByPullRequestsReferences: { nodes: ({ state: string } | null)[] };
 }
 
 interface IssueLookup {
@@ -114,9 +140,23 @@ function refusalFor(err: unknown, operation: string, tokenEnvVar: string): GitHu
   return new GitHubTrackerError(`could not reach GitHub while ${operation}`);
 }
 
+/** Whether a cross-reference or connection links this issue to another
+ * issue. A connection's own issue may sit at either end, so the other
+ * end is the one that is not this issue. */
+function linksAnIssue(event: TimelineNode, self: string): boolean {
+  const ends = [event.source, event.subject].filter((e): e is Subject => e != null && e.id !== self);
+  return ends.length === 1 && ends[0]?.__typename === "Issue";
+}
+
+const openCount = (nodes: ({ state: string } | null)[]) => nodes.filter((n) => n?.state === "OPEN").length;
+
 function toTicket(owner: string, repo: string, node: IssueNode): Ticket {
-  const events = node.timelineItems.nodes.map((n) => n?.__typename);
-  const count = (...types: string[]) => events.filter((t) => t !== undefined && types.includes(t)).length;
+  const events = node.timelineItems.nodes.filter((n): n is TimelineNode => n !== null);
+  const linked = events.filter(
+    (e) =>
+      (e.__typename === "CrossReferencedEvent" || e.__typename === "ConnectedEvent") &&
+      linksAnIssue(e, node.id),
+  ).length;
   return {
     key: `${owner}/${repo}#${node.number}`,
     title: node.title,
@@ -125,9 +165,11 @@ function toTicket(owner: string, repo: string, node: IssueNode): Ticket {
     url: node.url,
     createdAt: node.createdAt,
     reactions: node.reactions.totalCount,
-    linkedIssues:
-      count("CrossReferencedEvent", "ConnectedEvent") + node.subIssues.totalCount + (node.parent ? 1 : 0),
-    duplicates: count("MarkedAsDuplicateEvent"),
+    linkedIssues: linked + node.subIssues.totalCount,
+    duplicates: events.filter((e) => e.__typename === "MarkedAsDuplicateEvent").length,
+    openBlockers: openCount(node.blockedBy.nodes),
+    openClosingPrs: openCount(node.closedByPullRequestsReferences.nodes),
+    assignees: node.assignees.totalCount,
   };
 }
 
