@@ -93,6 +93,11 @@ export class GitHubTrackerError extends RefusalError {
   }
 }
 
+/** How to mint a token, named after the variable it is read from. */
+export function tokenHint(tokenEnvVar: string): string {
+  return `Set ${tokenEnvVar} to a token that can read the repository; with the gh CLI: gh auth login, then export ${tokenEnvVar}=$(gh auth token)`;
+}
+
 /** Translates whatever octokit threw into a value-free refusal. */
 function refusalFor(err: unknown, operation: string, tokenEnvVar: string): GitHubTrackerError {
   if (err instanceof GraphqlResponseError) {
@@ -104,9 +109,7 @@ function refusalFor(err: unknown, operation: string, tokenEnvVar: string): GitHu
     if (e.response === undefined) return new GitHubTrackerError(`could not reach GitHub while ${operation}`);
     if (e.status === 401 || e.status === 403) {
       return new GitHubTrackerError(
-        `GitHub refused the token while ${operation} (HTTP ${e.status}). ` +
-          `Set ${tokenEnvVar} to a token that can read the repository; with the gh CLI: ` +
-          `gh auth login, then export ${tokenEnvVar}=$(gh auth token)`,
+        `GitHub refused the token while ${operation} (HTTP ${e.status}). ${tokenHint(tokenEnvVar)}`,
       );
     }
     return new GitHubTrackerError(`GitHub answered HTTP ${e.status} while ${operation}`);

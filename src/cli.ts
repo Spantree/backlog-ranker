@@ -7,7 +7,15 @@
  */
 
 import { type ParseArgsConfig, parseArgs } from "node:util";
+import { rankBacklog } from "./api.js";
+import { openCache } from "./cache.js";
+import type { Ranking } from "./compose.js";
 import { HelpRequest, isHelpRequest, isRefusal, RefusalError } from "./errors.js";
+import { loadProject, type Project } from "./loader.js";
+import { loadRubric } from "./rubric.js";
+import { assertAllowed, parseSource } from "./source.js";
+import { renderTable } from "./table.js";
+import { MAX_TIEBREAK } from "./tiebreak.js";
 
 export interface CliIo {
   stdout(text: string): void;
@@ -20,9 +28,22 @@ export type VerbHandler = (args: readonly string[], io: CliIo) => Promise<void> 
 export const VERBS = ["rank", "calibrate", "explain"] as const;
 export type Verb = (typeof VERBS)[number];
 
+/** Resolves the project a verb runs in: its root, config and allowlist,
+ * with the engine and tracker built on demand. */
+export type ProjectResolver = (
+  cwd: string,
+  env: Readonly<Record<string, string | undefined>>,
+) => Project | Promise<Project>;
+
 export interface RunOptions {
   /** Replace one or more verb handlers; the rest keep their defaults. */
   verbs?: Partial<Record<Verb, VerbHandler>>;
+  /** The project resolver; {@link loadProject} by default. */
+  resolve?: ProjectResolver;
+  /** The working directory the project is resolved from. */
+  cwd?: () => string;
+  /** The clock that buckets ticket ages. */
+  now?: () => Date;
 }
 
 /** The hint printed when a refusal's frames were withheld: the
@@ -122,11 +143,153 @@ function notImplemented(verb: Verb): VerbHandler {
   };
 }
 
-const DEFAULT_VERBS: Record<Verb, VerbHandler> = {
-  rank: notImplemented("rank"),
-  calibrate: notImplemented("calibrate"),
-  explain: notImplemented("explain"),
-};
+type Values = ReturnType<typeof parseArgs>["values"];
+
+function usageError(verb: Verb, message: string): RefusalError {
+  return new RefusalError(`${message}\n\n${VERB_USAGE[verb]}`);
+}
+
+function requiredString(verb: Verb, values: Values, name: string): string {
+  const value = values[name];
+  if (typeof value !== "string" || value === "") throw usageError(verb, `--${name} is required`);
+  return value;
+}
+
+function noPositionals(verb: Verb, positionals: readonly string[]): void {
+  if (positionals.length > 0) {
+    throw usageError(
+      verb,
+      `unexpected argument${positionals.length > 1 ? "s" : ""} ${positionals.join(" ")}`,
+    );
+  }
+}
+
+/** A whole number from 1 to `max`, or absent. */
+function boundedInt(verb: Verb, values: Values, name: string, max: number): number | undefined {
+  const raw = values[name];
+  if (raw === undefined) return undefined;
+  const n = typeof raw === "string" && /^\d+$/.test(raw) ? Number(raw) : Number.NaN;
+  if (!(Number.isSafeInteger(n) && n >= 1 && n <= max)) {
+    const range =
+      max === Number.MAX_SAFE_INTEGER ? "a whole number of at least 1" : `a whole number from 1 to ${max}`;
+    throw usageError(verb, `--${name} takes ${range}, not "${String(raw)}"`);
+  }
+  return n;
+}
+
+/** `--weight id=n`, repeatable; the last value for an id wins. */
+function weightOverrides(verb: Verb, values: Values): Record<string, number> | undefined {
+  const raw = values.weight;
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const out: Record<string, number> = {};
+  for (const item of raw) {
+    const m = typeof item === "string" ? /^([a-z][a-z0-9_]*)=(\d+(?:\.\d+)?|\.\d+)$/.exec(item) : null;
+    if (m?.[1] === undefined || m[2] === undefined) {
+      throw usageError(verb, `--weight takes <criterion>=<number>, such as impact=2, not "${String(item)}"`);
+    }
+    out[m[1]] = Number(m[2]);
+  }
+  return out;
+}
+
+interface VerbDeps {
+  resolve: ProjectResolver;
+  cwd: () => string;
+  now: () => Date;
+}
+
+function rankJson(ranking: Ranking): { ranked: unknown[]; held: unknown[] } {
+  const row = (r: Ranking["ranked"][number], position: number | null): unknown => ({
+    position,
+    key: r.key,
+    title: r.title,
+    url: r.url,
+    composite: r.composite,
+    pinnedBy: r.pinnedBy,
+    heldBy: r.heldBy,
+    lowConfidence: r.lowConfidence,
+    truncated: r.truncated,
+    answers: r.answers,
+  });
+  return {
+    ranked: ranking.ranked.map((r, i) => row(r, i + 1)),
+    held: ranking.held.map((r) => row(r, null)),
+  };
+}
+
+function rankVerb(deps: VerbDeps): VerbHandler {
+  return async (args, io) => {
+    const { values, positionals } = parseVerbArgs("rank", args);
+    noPositionals("rank", positionals);
+    const rubricName = requiredString("rank", values, "rubric");
+    const source = parseSource(requiredString("rank", values, "source"));
+    const weights = weightOverrides("rank", values);
+    const top = boundedInt("rank", values, "tiebreak", MAX_TIEBREAK);
+    const concurrency = boundedInt("rank", values, "concurrency", Number.MAX_SAFE_INTEGER);
+    const project = await deps.resolve(deps.cwd(), io.env);
+    // The allowlist is checked before the rubric is read, the tracker is
+    // built, or anything leaves the machine.
+    assertAllowed(source, project.sources, project.allowlistKey);
+    const loaded = loadRubric(project.projectRoot, rubricName);
+    // The tracker first: an unsupported source should say so, not report
+    // a missing engine key.
+    const tracker = project.tracker(source);
+    const engine = project.engine();
+    const cache = openCache(project.projectRoot, engine.id, engine.model, deps.now);
+    const result = await rankBacklog({
+      rubric: loaded.rubric,
+      tracker,
+      engine,
+      cache,
+      now: deps.now,
+      ...(weights === undefined ? {} : { weights }),
+      ...(top === undefined ? {} : { tiebreak: top }),
+      ...(concurrency === undefined ? {} : { concurrency }),
+    });
+    if (values.json === true) {
+      const report = {
+        rubric: result.rubric.name,
+        rubricPath: loaded.path,
+        rubricHash: loaded.hash,
+        configPath: project.configPath,
+        source: source.spec,
+        engine: engine.id,
+        model: engine.model,
+        backend: project.backend,
+        stats: result.stats,
+        tiebreak: result.tiebreak,
+        ...rankJson(result.ranking),
+      };
+      io.stdout(`${JSON.stringify(report, null, 2)}\n`);
+      return;
+    }
+    const header = {
+      rubricPath: loaded.path,
+      rubricHash: loaded.hash,
+      configPath: project.configPath,
+      source: source.spec,
+      engine: engine.id,
+      model: engine.model,
+      backend: project.backend,
+    };
+    const table = renderTable({
+      rubric: result.rubric,
+      header,
+      ranking: result.ranking,
+      stats: result.stats,
+      ...(result.tiebreak === undefined ? {} : { tiebreak: result.tiebreak }),
+    });
+    io.stdout(`${table}\n`);
+  };
+}
+
+function defaultVerbs(deps: VerbDeps): Record<Verb, VerbHandler> {
+  return {
+    rank: rankVerb(deps),
+    calibrate: notImplemented("calibrate"),
+    explain: notImplemented("explain"),
+  };
+}
 
 function isVerb(word: string): word is Verb {
   return (VERBS as readonly string[]).includes(word);
@@ -146,7 +309,12 @@ function dispatch(
 }
 
 export async function run(argv: readonly string[], io: CliIo, options: RunOptions = {}): Promise<number> {
-  const verbs = { ...DEFAULT_VERBS, ...options.verbs };
+  const deps: VerbDeps = {
+    resolve: options.resolve ?? loadProject,
+    cwd: options.cwd ?? (() => process.cwd()),
+    now: options.now ?? (() => new Date()),
+  };
+  const verbs = { ...defaultVerbs(deps), ...options.verbs };
   try {
     await dispatch(argv, io, verbs);
     return 0;
