@@ -1,0 +1,38 @@
+# The fixture rubric the recorded Jev answers in fixtures/jev/ were
+# captured against (scripts/capture-fixtures.ts). Editing a question or a
+# level changes its cache key and needs a re-capture.
+name: fixture-roi
+description: Impact over effort, with a security pin and a judgeable hold.
+compose: roi
+confidence_floor: 0.5
+criteria:
+  - id: impact
+    direction: benefit
+    weight: 1
+    question: How much does completing this ticket improve the toolkit for the people and agents who use it?
+    levels:
+      - "Cosmetic: wording or a nicety nobody is slowed by"
+      - Removes minor friction in a rarely used command
+      - Removes recurring friction in a workflow used on most goals
+      - Fixes a failure that blocks a workflow used on most goals
+      - Prevents a leaked secret, lost work, or silently wrong results
+  - id: effort
+    direction: cost
+    weight: 1
+    question: How much engineering work does completing this ticket take, judged from the change it describes?
+    levels:
+      - A documentation edit or a one-line change
+      - A small change inside one module, with a test
+      - Changes across several modules of one package
+      - A new command or a change spanning several packages
+      - A new subsystem that needs its own design decisions
+gates:
+  - id: security
+    question: Does this ticket describe a secret or credential reaching a place it should not, such as a log, a terminal pane or a commit?
+    action: pin_top
+    threshold: 0.5
+  - id: judgeable
+    question: Does the ticket say concretely what is wrong or missing and what done looks like?
+    action: flag_if_below
+    threshold: 0.5
+tiebreak_question: Which ticket should be done first, given its impact on users and the work it takes?
