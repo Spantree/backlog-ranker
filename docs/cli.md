@@ -74,7 +74,7 @@ usage: backlog-decisions explain --rubric <name> <owner/repo#123> [options]
   -h, --help              This text
 ```
 
-Prints one issue's composite, each criterion's per-level probabilities, score and confidence, each gate's probability against its threshold and whether it pinned or held the issue, and its flags. The source is the key's repository, which must be on the allowlist. Answers come from the cache when a `rank` already asked them; otherwise one request is sent.
+Prints one issue's composite, each criterion's per-level probabilities, score and confidence, each gate's probability against its threshold and whether it pinned or held the issue, and its flags. The source is the key's repository, which must be on the allowlist, and the header names it. Decision-model answers come from the cache after a rank; one GitHub lookup reads the issue. Without cached answers, one decision-model request is sent.
 
 ```bash
 backlog-decisions explain -r impact-roi acme/app#42
@@ -112,4 +112,4 @@ Each row: `position` (1-based; `null` for held rows), `key`, `title`, `url`, `co
 
 `calibrate`: `rubric`, `rubricHash`, `rubricPath`, `configPath`, `source`, `engine`, `model`, `backend`, `hand` (the expanded keys), `tool` (the tool's order of the same keys), `stats`, and the calibration: `n`, `concordant`, `discordant`, `tau`, `trusted`, `disagreements` (`{ "above", "below" }` pairs, the hand ranking's choice first). The exit code is 2 when `trusted` is false, with or without `--json`.
 
-`explain`: `rubric`, `rubricPath`, `rubricHash`, `configPath`, `engine`, `model`, `backend`, `source`, `key`, `title`, `url`, `truncated`, `composite`, `criteria` (each `id`, `direction`, `weight`, `score`, `confidence`, `lowConfidence`, and `levels` as `{ "index", "text", "probability" }`), `gates` (each `id`, `action`, `threshold`, `probability`, `triggered`), `flags` (`pinnedBy`, `heldBy`, `lowConfidence`, `truncated`) and `stats`.
+`explain`: `rubric`, `rubricPath`, `rubricHash`, `configPath`, `source`, `engine`, `model`, `backend`, `key`, `title`, `url`, `truncated`, `composite`, `criteria` (each `id`, `direction`, `weight`, `score`, `confidence`, `lowConfidence`, and `levels` as `{ "index", "text", "probability" }`), `gates` (each `id`, `action`, `threshold`, `probability`, `triggered`), `flags` (`pinnedBy`, `heldBy`, `lowConfidence`, `truncated`) and `stats`.

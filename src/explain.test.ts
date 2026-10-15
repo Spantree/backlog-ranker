@@ -79,7 +79,7 @@ describe("explain", () => {
     expect(stderr()).toBe("");
     expect(counts).toEqual({ github: 1, jev: 1, other: 0 });
     const text = stdout();
-    expect(text).toContain(`(sha ${FIXTURE_HASH})`);
+    expect(text.split("\n")[0]).toContain(`(sha ${FIXTURE_HASH}), source github:kit/kit`);
     expect(text).toContain("engine typesafe/jev-1.14 via openrouter");
     expect(text).toContain("kit/kit#1");
     expect(text).toContain("Executor launches print the API key into the pane");

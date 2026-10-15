@@ -95,7 +95,9 @@ Exits 2 when the tool's ranking is not trusted.`,
   -r, --rubric <name>     Rubric under .backlog-decisions/rubrics/, or a YAML file path
                           (a relative path resolves against the project root)
   -j, --json              Machine-readable output
-  -h, --help              This text`,
+  -h, --help              This text
+
+Decision-model answers come from the cache after a rank; one GitHub lookup reads the issue.`,
 };
 
 /** Flags each verb accepts; anything else is refused as a usage error. */
@@ -445,13 +447,14 @@ function explainVerb(deps: VerbDeps): VerbHandler {
       rubricPath: loaded.path,
       rubricHash: loaded.hash,
       configPath: project.configPath,
+      source: source.spec,
       engine: engine.id,
       model: engine.model,
       backend: project.backend,
     };
     if (values.json === true) {
       const { rubric, ...rest } = result;
-      const report = { rubric: rubric.name, ...header, source: source.spec, ...rest };
+      const report = { rubric: rubric.name, ...header, ...rest };
       io.stdout(`${JSON.stringify(report, null, 2)}\n`);
       return;
     }

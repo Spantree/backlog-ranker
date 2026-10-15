@@ -123,12 +123,12 @@ export function renderTable(opts: {
 
 /** One ticket's reasoning: each criterion as a distribution over its
  * levels, each gate against its threshold, and the flags they raise. */
-export function renderExplain(opts: { header: Omit<RunHeader, "source">; result: ExplainResult }): string {
+export function renderExplain(opts: { header: RunHeader; result: ExplainResult }): string {
   const { header, result } = opts;
   const { rubric } = result;
   const floor = rubric.confidence_floor;
   const lines = [
-    `backlog-decisions explain: rubric ${rubric.name} (${header.rubricPath}) (sha ${header.rubricHash})`,
+    `backlog-decisions explain: rubric ${rubric.name} (${header.rubricPath}) (sha ${header.rubricHash}), source ${header.source}`,
     `engine ${header.engine}/${header.model} via ${header.backend} (config ${header.configPath}); compose ${rubric.compose}; confidence floor ${floor.toFixed(2)}`,
     "",
     `${result.key}  ${result.title}`,
