@@ -6,7 +6,7 @@
  * any request leaves the machine.
  */
 
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import {
   CONFIG_PATH,
   type Config,
@@ -26,8 +26,16 @@ import { trackerFor } from "./trackers/index.js";
 import { linearKeyHint } from "./trackers/linear.js";
 import type { FetchFn, Tracker } from "./trackers/tracker.js";
 
-/** Where the allowlist lives, named in the refusal. */
+/** Where the allowlist lives in the committed config, named in the refusal. */
 export const ALLOWLIST_KEY = "sources in .backlog-ranker/config.yaml";
+
+/** The allowlist key for the config file actually read: a
+ * `config.local.yaml` replaces the committed file outright, so the
+ * refusal must send the user there. A run with no file (`--allow-once`)
+ * points at the committed file it would create. */
+function allowlistKeyFor(configPath: string): string {
+  return configPath === NO_CONFIG_PATH ? ALLOWLIST_KEY : `sources in ${configPath.split(sep).join("/")}`;
+}
 
 export interface Project {
   projectRoot: string;
@@ -109,13 +117,14 @@ export function loadProject(
   const sources =
     options.allowOnce === undefined ? config.sources : [...config.sources, options.allowOnce.spec];
   const fetchOpt = options.fetch === undefined ? {} : { fetch: options.fetch };
+  const allowlistKey = allowlistKeyFor(loaded.path);
   let engine: DecisionEngine | undefined;
   return {
     projectRoot,
     configPath: loaded.path,
     config,
     sources,
-    allowlistKey: ALLOWLIST_KEY,
+    allowlistKey,
     backend: config.backend,
     engine() {
       if (engine !== undefined) return engine;
@@ -138,7 +147,7 @@ export function loadProject(
     tracker(source) {
       // Defence for library callers: the CLI checks first, so its refusal
       // precedes the rubric read; nothing is built for an unlisted source.
-      assertAllowed(source, sources, ALLOWLIST_KEY);
+      assertAllowed(source, sources, allowlistKey);
       const tokenEnvVar = config.keys[source.kind];
       const token = env[tokenEnvVar];
       if (!present(token)) {

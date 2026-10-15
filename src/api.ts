@@ -13,7 +13,7 @@ import type { DecisionEngine } from "./engine.js";
 import { RefusalError } from "./errors.js";
 import { type Calibration, kendallTau } from "./kendall.js";
 import { type FactGate, type Gate, parseRubric, type Rubric, withWeights } from "./rubric.js";
-import { type ScoreStats, scoreTickets } from "./score.js";
+import { assertConcurrency, type ScoreStats, scoreTickets } from "./score.js";
 import type { AgeBucket, TicketState } from "./state.js";
 import { type Ticket, type TicketFacts, ticketFacts } from "./ticket.js";
 import { MAX_TIEBREAK, type TiebreakStats, tiebreak } from "./tiebreak.js";
@@ -94,6 +94,7 @@ export async function rankBacklog(opts: RankOptions): Promise<RankResult> {
   if (top !== undefined && !(Number.isInteger(top) && top >= 1 && top <= MAX_TIEBREAK)) {
     throw new RefusalError(`tiebreak is a whole number from 1 to ${MAX_TIEBREAK} (pairs grow quadratically)`);
   }
+  if (opts.concurrency !== undefined) assertConcurrency(opts.concurrency);
   const rubric = resolveRubric(opts);
   const now = opts.now ?? (() => new Date());
   const concurrency = opts.concurrency === undefined ? {} : { concurrency: opts.concurrency };
@@ -134,6 +135,7 @@ export async function calibrateBacklog(opts: CalibrateOptions): Promise<Calibrat
   const hand = [...opts.hand];
   if (new Set(hand).size !== hand.length) throw new RefusalError("the hand ranking lists a key twice");
   if (hand.length < 2) throw new RefusalError("the hand ranking needs at least two issue keys, best first");
+  if (opts.concurrency !== undefined) assertConcurrency(opts.concurrency);
   const rubric = resolveRubric(opts);
   const now = opts.now ?? (() => new Date());
   try {

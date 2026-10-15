@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { calibrateBacklog, explainTicket, rankBacklog } from "./api.js";
@@ -7,6 +7,7 @@ import { openCache } from "./cache.js";
 import type { DecisionAnswer, DecisionEngine } from "./engine.js";
 import { isRefusal } from "./errors.js";
 import { parseRubric } from "./rubric.js";
+import { scoreTickets } from "./score.js";
 import type { Ticket } from "./ticket.js";
 import type { Tracker } from "./trackers/tracker.js";
 
@@ -147,6 +148,42 @@ criteria:
     expect(again.ranking.ranked.map((r) => r.key)).toEqual(["acme/app#5", "acme/app#6"]);
   });
 
+  test("a re-weighted tie-break with the default pair question asks the engine nothing", async () => {
+    // No tiebreak_question: the pair question is built from the criteria,
+    // and must not depend on their weights, zero included. The overrides
+    // keep the top-two order, so the pair is the same state as before.
+    const rubric = parseRubric(
+      `name: sum
+compose: weighted_sum
+criteria:
+  - id: impact
+    direction: benefit
+    question: How much?
+    levels: [a, b, c, d, e]
+  - id: effort
+    direction: cost
+    question: How hard?
+    levels: [a, b, c, d, e]
+`,
+      "sum",
+    );
+    const pair = [ticket(5, "costly big"), ticket(6, "cheap small")];
+    const engine = stubEngine();
+    const cache = openCache(tmp(), engine.id, engine.model);
+    const base = { rubric, tickets: pair, engine, cache, now: () => NOW, tiebreak: 2 };
+    const first = await rankBacklog(base);
+    expect(first.tiebreak?.requests).toBe(1);
+    const asked = engine.calls;
+
+    for (const weights of [{ effort: 2 }, { impact: 0 }]) {
+      const again = await rankBacklog({ ...base, weights });
+      expect(again.ranking.ranked.map((r) => r.key)).toEqual(first.ranking.ranked.map((r) => r.key));
+      expect(again.stats.requests).toBe(0);
+      expect(again.tiebreak).toMatchObject({ requests: 0, cacheHits: 1 });
+    }
+    expect(engine.calls).toBe(asked);
+  });
+
   test("reads a tracker's pending tickets and flushes the cache for the next run", async () => {
     const root = tmp();
     const engine = stubEngine();
@@ -215,6 +252,43 @@ criteria:
       );
       expect(isRefusal(err)).toBe(true);
     }
+    expect(engine.calls).toBe(0);
+  });
+});
+
+describe("concurrency", () => {
+  test("a concurrency that is not a whole number of at least 1 is refused before anything is read", async () => {
+    const engine = stubEngine();
+    const cache = openCache(tmp(), engine.id, engine.model);
+    let reads = 0;
+    const tracker: Tracker = {
+      source: "github:acme/app",
+      pending: async () => {
+        reads++;
+        return TICKETS;
+      },
+      issues: async () => {
+        reads++;
+        return TICKETS;
+      },
+    };
+    const base = { rubric: RUBRIC_PATH, engine, cache, tracker };
+    const rubric = parseRubric(readFileSync(RUBRIC_PATH, "utf8"), RUBRIC_PATH);
+    for (const concurrency of [0, -1, 1.5, Number.NaN]) {
+      for (const run of [
+        () => rankBacklog({ ...base, concurrency }),
+        () => calibrateBacklog({ ...base, concurrency, hand: ["acme/app#1", "acme/app#2"] }),
+        () => scoreTickets({ tickets: TICKETS, rubric, engine, cache, now: NOW, concurrency }),
+      ]) {
+        const err = await run().then(
+          () => undefined,
+          (e: unknown) => e,
+        );
+        expect(isRefusal(err)).toBe(true);
+        expect((err as Error).message).toContain("concurrency is a whole number of at least 1");
+      }
+    }
+    expect(reads).toBe(0);
     expect(engine.calls).toBe(0);
   });
 });

@@ -29,17 +29,15 @@ export interface TiebreakStats {
 
 /** The fallback pairwise question carries every criterion's own question
  * and levels, not just its id: the id is a name, the wording is the
- * policy, and a reworded criterion must re-ask (it changes this hash). */
+ * policy, and a reworded criterion must re-ask (it changes this hash).
+ * It names each criterion's direction but never its weight, and lists
+ * every criterion whatever its weight: weights are composition inputs
+ * only, so a `--weight` override never changes this question. */
 function defaultAsk(rubric: Rubric): string {
-  // Zero-weight criteria do not count in the composite, so they do not
-  // count here; the rest carry their weight so the pair is judged by the
-  // same policy the ranking used.
-  const criteria = rubric.criteria
-    .filter((c) => c.weight > 0)
-    .map((c) => {
-      const better = c.direction === "benefit" ? "a higher level is better" : "a lower level is better";
-      return `- ${c.question} Levels, lowest first: ${c.levels.join(" | ")}. ${better}; weight ${c.weight}.`;
-    });
+  const criteria = rubric.criteria.map((c) => {
+    const better = c.direction === "benefit" ? "a higher level is better" : "a lower level is better";
+    return `- ${c.question} Levels, lowest first: ${c.levels.join(" | ")}. ${better}.`;
+  });
   return ["Which ticket should be done first, judged by these criteria?", ...criteria].join("\n");
 }
 
