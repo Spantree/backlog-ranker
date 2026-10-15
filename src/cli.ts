@@ -252,8 +252,6 @@ function dispatch(
 ): ReturnType<VerbHandler> {
   const [first, ...rest] = argv;
   if (first === undefined || first === "--help" || first === "-h") throw new HelpRequest(USAGE);
-  // Ranking is the default: a flag first means `rank` with every argument.
-  if (first.startsWith("-") && first !== "--version") return verbs.rank(argv, io);
   if (!isVerb(first)) {
     throw new RefusalError(`unknown verb \`${first}\`; expected one of ${VERBS.join(", ")}\n\n${USAGE}`);
   }

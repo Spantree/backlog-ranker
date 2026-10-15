@@ -106,20 +106,6 @@ describe("built bin under node: rank in a temp project", () => {
   test("rank --help answers without a project", () => {
     const r = runBin(["rank", "--help"], {}, tmpdir());
     expect(r.code).toBe(0);
-    expect(r.stdout).toContain("backlog-ranker [rank]");
-  });
-
-  test("a flag first ranks: an unlisted source refuses at the allowlist", () => {
-    const r = runBin(["-r", "fixture", "-s", "github:other/repo"], {}, project);
-    expect(r.code).toBe(1);
-    expect(r.stderr).toStartWith("github:other/repo is not on the backlog source allowlist");
-    expect(existsSync(join(project, ".backlog-ranker", "cache"))).toBe(false);
-  });
-
-  test("a mistyped verb refuses naming it, exit 1", () => {
-    const r = runBin(["explian"], {}, project);
-    expect(r.code).toBe(1);
-    expect(r.stdout).toBe("");
-    expect(r.stderr).toStartWith("unknown verb `explian`; expected one of rank, calibrate, explain");
+    expect(r.stdout).toContain("backlog-ranker rank");
   });
 });

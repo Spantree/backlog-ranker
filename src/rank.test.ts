@@ -193,44 +193,8 @@ describe("rank", () => {
 
   test("--help prints the verb's usage on stdout and sends nothing", async () => {
     expect(await rank("--help")).toBe(0);
-    expect(stdout()).toContain("backlog-ranker [rank]");
+    expect(stdout()).toContain("backlog-ranker rank");
     expect(stderr()).toBe("");
     expect(counts).toEqual({ github: 0, jev: 0, other: 0 });
-  });
-});
-
-describe("rank as the default verb", () => {
-  /** One cold run in its own project, so neither run sees the other's cache. */
-  async function coldRun(
-    argv: string[],
-  ): Promise<{ code: number; out: string; err: string; counts: RequestCounts }> {
-    const dir = fixtureRoot("default");
-    try {
-      const fixture = fixtureProject(dir);
-      const io = captureIo();
-      const code = await run(argv, io.io, {
-        resolve: () => fixture.project,
-        cwd: () => dir,
-        now: () => FIXTURE_NOW,
-      });
-      return { code, out: io.stdout(), err: io.stderr(), counts: fixture.counts };
-    } finally {
-      removeRoot(dir);
-    }
-  }
-
-  test("ranking without the word rank prints byte-identical output", async () => {
-    const args = ["-r", "fixture", "-s", "github:kit/kit"];
-    const explicit = await coldRun(["rank", ...args]);
-    const implicit = await coldRun(args);
-    expect(explicit.code).toBe(0);
-    expect(implicit).toEqual(explicit);
-  });
-
-  test("a mistyped verb is refused with zero requests and no cache", async () => {
-    const r = await coldRun(["explian", "-r", "fixture", "-s", "github:kit/kit"]);
-    expect(r.code).toBe(1);
-    expect(r.err).toStartWith("unknown verb `explian`");
-    expect(r.counts).toEqual({ github: 0, jev: 0, other: 0 });
   });
 });

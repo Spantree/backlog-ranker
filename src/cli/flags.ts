@@ -17,13 +17,10 @@ export function isVerb(word: string): word is Verb {
   return (VERBS as readonly string[]).includes(word);
 }
 
-export const USAGE = `usage: backlog-ranker [rank] -r <rubric> -s <source> [options]
-       backlog-ranker calibrate -r <rubric> -s <source> --hand KEY,KEY,... [options]
-       backlog-ranker explain -r <rubric> <owner/repo#123> [options]
+export const USAGE = `usage: backlog-ranker <verb> [options]
 
 verbs:
-  rank       Rank a source's open tickets against a rubric; the default
-             when the first argument is a flag
+  rank       Rank a source's open tickets against a rubric
   calibrate  Compare the tool's ranking with a hand ranking
   explain    Show one ticket's scores, gates and flags
 
@@ -33,7 +30,7 @@ const RUBRIC_HELP = `  -r, --rubric <name>     Rubric under .backlog-ranker/rubr
                           (a relative path resolves against the project root)`;
 
 export const VERB_USAGE: Record<Verb, string> = {
-  rank: `usage: backlog-ranker [rank] --rubric <name|path> --source <spec> [options]
+  rank: `usage: backlog-ranker rank --rubric <name|path> --source <spec> [options]
 
 ${RUBRIC_HELP}
   -s, --source <spec>     github:owner/repo (linear:TEAM is planned)
