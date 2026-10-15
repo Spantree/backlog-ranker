@@ -13,7 +13,7 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 import { RefusalError } from "./errors.js";
@@ -129,6 +129,21 @@ export interface LoadedRubric {
   /** Project-relative path of the file that was read. */
   path: string;
   local: boolean;
+}
+
+/** A `--rubric` value naming a file rather than a rubric: it holds a
+ * `/` or ends in `.yaml`/`.yml`. */
+export function isRubricPath(value: string): boolean {
+  return value.includes("/") || /\.ya?ml$/.test(value);
+}
+
+/** Read a rubric from a YAML file path, resolved against `cwd`; the
+ * header names the path as given. */
+export function loadRubricFile(path: string, cwd: string): LoadedRubric {
+  const abs = resolve(cwd, path);
+  if (!existsSync(abs)) throw new RubricError(`no rubric file ${path}`);
+  const text = readFileSync(abs, "utf8");
+  return { rubric: parseRubric(text, path), hash: rubricHash(text), path, local: false };
 }
 
 /** Resolve `--rubric <name>` against `.backlog-decisions/rubrics/`, local first. */
