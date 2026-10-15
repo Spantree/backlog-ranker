@@ -17,8 +17,11 @@
   "types": "dist/index.d.ts",
   "files": [
     "dist",
+    "rubrics",
+    "skills",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "ROADMAP.md"
   ],
   "engines": {
     "node": ">=22"
