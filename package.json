@@ -17,15 +17,18 @@
   "types": "dist/index.d.ts",
   "files": [
     "dist",
+    "rubrics",
+    "skills",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "ROADMAP.md"
   ],
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.scripts.json",
     "lint": "biome check .",
     "format": "biome format --write .",
     "test": "bun test"
