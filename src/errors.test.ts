@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { HELP_REQUEST_MARKER, HelpRequest, isHelpRequest, isRefusal, REFUSAL_MARKER, RefusalError } from "./errors.js";
+import {
+  HELP_REQUEST_MARKER,
+  HelpRequest,
+  isHelpRequest,
+  isRefusal,
+  REFUSAL_MARKER,
+  RefusalError,
+} from "./errors.js";
 
 describe("refusal brand", () => {
   test("a RefusalError is a refusal whose brand is non-enumerable", () => {
@@ -15,7 +22,7 @@ describe("refusal brand", () => {
     const foreign = Object.defineProperty(new Error("other copy"), Symbol.for("backlog-decisions.refusal"), {
       value: true,
     });
-    expect(REFUSAL_MARKER).toBe(Symbol.for("backlog-decisions.refusal"));
+    expect<symbol>(REFUSAL_MARKER).toBe(Symbol.for("backlog-decisions.refusal"));
     expect(isRefusal(foreign)).toBe(true);
   });
 
@@ -40,7 +47,7 @@ describe("help-request brand", () => {
     const help = new HelpRequest("usage: backlog-decisions rank");
     expect(isHelpRequest(help)).toBe(true);
     expect(help.message).toBe("usage: backlog-decisions rank");
-    expect(HELP_REQUEST_MARKER).toBe(Symbol.for("backlog-decisions.help-request"));
+    expect<symbol>(HELP_REQUEST_MARKER).toBe(Symbol.for("backlog-decisions.help-request"));
   });
 
   test("a help request is not a refusal and vice versa", () => {

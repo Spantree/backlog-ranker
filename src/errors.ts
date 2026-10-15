@@ -35,7 +35,9 @@ export class RefusalError extends Error {
  * hit a hostile getter or Proxy. */
 export function isRefusal(err: unknown): boolean {
   try {
-    return typeof err === "object" && err !== null && (err as Record<symbol, unknown>)[REFUSAL_MARKER] === true;
+    return (
+      typeof err === "object" && err !== null && (err as Record<symbol, unknown>)[REFUSAL_MARKER] === true
+    );
   } catch {
     return false;
   }
@@ -64,7 +66,9 @@ export class HelpRequest extends Error {
 export function isHelpRequest(err: unknown): err is HelpRequest {
   try {
     return (
-      typeof err === "object" && err !== null && (err as Record<symbol, unknown>)[HELP_REQUEST_MARKER] === true
+      typeof err === "object" &&
+      err !== null &&
+      (err as Record<symbol, unknown>)[HELP_REQUEST_MARKER] === true
     );
   } catch {
     return false;
