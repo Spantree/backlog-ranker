@@ -1,0 +1,166 @@
+{
+  "data": {
+    "repository": {
+      "issues": {
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": null
+        },
+        "nodes": [
+          {
+            "number": 1,
+            "title": "Executor launches print the API key into the pane",
+            "body": "Every executor launch exports the project's API key on the command line it types into the terminal pane, so the key sits in scrollback and in any screen recording. It should reach the process through the environment file instead. Done when no launch types a credential value into a pane.",
+            "url": "https://github.com/kit/kit/issues/1",
+            "createdAt": "2026-09-01T12:00:00.000Z",
+            "labels": {
+              "nodes": [
+                {
+                  "name": "Bug"
+                },
+                {
+                  "name": "security"
+                }
+              ]
+            },
+            "reactions": {
+              "totalCount": 2
+            },
+            "timelineItems": {
+              "nodes": []
+            },
+            "subIssues": {
+              "totalCount": 0
+            },
+            "parent": {
+              "number": 4
+            }
+          },
+          {
+            "number": 2,
+            "title": "Fix a typo in the README install section",
+            "body": "The README says `bun instal` instead of `bun install` in the install section. Done when the command is spelled correctly.",
+            "url": "https://github.com/kit/kit/issues/2",
+            "createdAt": "2026-10-10T12:00:00.000Z",
+            "labels": {
+              "nodes": [
+                {
+                  "name": "Docs"
+                }
+              ]
+            },
+            "reactions": {
+              "totalCount": 0
+            },
+            "timelineItems": {
+              "nodes": []
+            },
+            "subIssues": {
+              "totalCount": 0
+            },
+            "parent": null
+          },
+          {
+            "number": 3,
+            "title": "Lint gate crashes on every goal that renames a file",
+            "body": "`lint gate` throws a TypeError whenever the change set contains a renamed file, which most refactoring goals do. The goal cannot lock until someone patches the gate by hand. The rename path in the diff reader reads the old path from the wrong field. Done when a rename passes through the gate and a test covers it.",
+            "url": "https://github.com/kit/kit/issues/3",
+            "createdAt": "2026-09-20T12:00:00.000Z",
+            "labels": {
+              "nodes": [
+                {
+                  "name": "Bug"
+                }
+              ]
+            },
+            "reactions": {
+              "totalCount": 1
+            },
+            "timelineItems": {
+              "nodes": [
+                {
+                  "__typename": "CrossReferencedEvent"
+                },
+                {
+                  "__typename": "MarkedAsDuplicateEvent"
+                }
+              ]
+            },
+            "subIssues": {
+              "totalCount": 0
+            },
+            "parent": null
+          },
+          {
+            "number": 4,
+            "title": "Add a federated query layer over every tracker",
+            "body": "Build a new service that federates Linear, GitHub, Jira and Notion behind one query language, with its own schema registry, a caching tier and a permissions model, so every verb reads issues through it. Needs design decisions on hosting, auth and the query language before any code.",
+            "url": "https://github.com/kit/kit/issues/4",
+            "createdAt": "2026-08-15T12:00:00.000Z",
+            "labels": {
+              "nodes": [
+                {
+                  "name": "Feature"
+                }
+              ]
+            },
+            "reactions": {
+              "totalCount": 0
+            },
+            "timelineItems": {
+              "nodes": []
+            },
+            "subIssues": {
+              "totalCount": 0
+            },
+            "parent": null
+          },
+          {
+            "number": 5,
+            "title": "Make it better",
+            "body": "",
+            "url": "https://github.com/kit/kit/issues/5",
+            "createdAt": "2026-10-01T12:00:00.000Z",
+            "labels": {
+              "nodes": []
+            },
+            "reactions": {
+              "totalCount": 0
+            },
+            "timelineItems": {
+              "nodes": []
+            },
+            "subIssues": {
+              "totalCount": 0
+            },
+            "parent": null
+          },
+          {
+            "number": 6,
+            "title": "Print the elapsed time after a timing run",
+            "body": "`goals timing run` records the duration but prints nothing when the command ends, so the user opens the log to see how long it took. Print one line with the elapsed time. Done when the line prints and a test pins its shape.",
+            "url": "https://github.com/kit/kit/issues/6",
+            "createdAt": "2026-10-05T12:00:00.000Z",
+            "labels": {
+              "nodes": [
+                {
+                  "name": "Feature"
+                }
+              ]
+            },
+            "reactions": {
+              "totalCount": 0
+            },
+            "timelineItems": {
+              "nodes": []
+            },
+            "subIssues": {
+              "totalCount": 0
+            },
+            "parent": null
+          }
+        ]
+      }
+    }
+  }
+}
