@@ -42,6 +42,12 @@ const PENDING_QUERY = `query($owner: String!, $name: String!, $after: String) {
   }
 }`;
 
+const ISSUE_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) { issue(number: $number) { ${ISSUE_FIELDS} } }
+}`;
+
+const KEY_RE = /^([\w.-]+)\/([\w.-]+)#([1-9]\d*)$/;
+
 interface IssueNode {
   number: number;
   title: string;
@@ -53,6 +59,22 @@ interface IssueNode {
   timelineItems: { nodes: ({ __typename: string } | null)[] };
   subIssues: { totalCount: number };
   parent: { number: number } | null;
+}
+
+interface IssueLookup {
+  repository: { issue: IssueNode | null } | null;
+}
+
+/** GitHub answers a missing issue number with null data and only
+ * a NOT_FOUND error at `repository.issue`; that is a missing issue, not
+ * a failed request. A missing repository still refuses as an error. */
+function notFound(err: GraphqlResponseError<IssueLookup>): IssueLookup | undefined {
+  const onlyNotFound =
+    err.errors?.every((e) => {
+      const { type, path } = e as { type?: unknown; path?: unknown };
+      return type === "NOT_FOUND" && Array.isArray(path) && path.join(".") === "repository.issue";
+    }) ?? false;
+  return onlyNotFound ? { repository: null } : undefined;
 }
 
 interface PendingPage {
@@ -116,10 +138,19 @@ export function githubTracker(opts: GitHubTrackerOptions): Tracker {
     ...(opts.fetch ? { request: { fetch: opts.fetch } } : {}),
   });
 
-  async function call<T>(operation: string, query: string, variables: Record<string, unknown>): Promise<T> {
+  /** Runs one query. `partial` may accept a GraphQL-error reply's partial
+   * data instead of refusing (a missing issue arrives as NOT_FOUND). */
+  async function call<T>(
+    operation: string,
+    query: string,
+    variables: Record<string, unknown>,
+    partial?: (err: GraphqlResponseError<T>) => T | undefined,
+  ): Promise<T> {
     try {
       return await gh<T>(query, variables);
     } catch (err) {
+      const accepted = partial && err instanceof GraphqlResponseError ? partial(err) : undefined;
+      if (accepted !== undefined) return accepted;
       throw refusalFor(err, operation, tokenEnvVar);
     }
   }
@@ -142,8 +173,34 @@ export function githubTracker(opts: GitHubTrackerOptions): Tracker {
       }
       return tickets;
     },
-    async issues() {
-      throw new Error("not yet");
+    async issues(keys) {
+      const repoName = `${owner}/${repo}`.toLowerCase();
+      const numbers: number[] = [];
+      const foreign: string[] = [];
+      for (const key of keys) {
+        const m = KEY_RE.exec(key);
+        if (m && `${m[1]}/${m[2]}`.toLowerCase() === repoName) numbers.push(Number(m[3]));
+        else foreign.push(key);
+      }
+      if (foreign.length > 0) {
+        throw new GitHubTrackerError(
+          `${foreign.join(", ")} not in ${owner}/${repo}, the repository this source reads ` +
+            `(keys look like ${owner}/${repo}#123)`,
+        );
+      }
+      const tickets: Ticket[] = [];
+      for (const number of numbers) {
+        const key = `${owner}/${repo}#${number}`;
+        const data = await call<IssueLookup>(
+          `reading ${key}`,
+          ISSUE_QUERY,
+          { owner, name: repo, number },
+          notFound,
+        );
+        if (data.repository?.issue == null) throw new GitHubTrackerError(`GitHub has no issue ${key}`);
+        tickets.push(toTicket(owner, repo, data.repository.issue));
+      }
+      return tickets;
     },
   };
 }

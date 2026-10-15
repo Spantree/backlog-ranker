@@ -160,3 +160,66 @@ describe("githubTracker errors", () => {
     expect(err.message).toBe("could not reach GitHub while listing o/r's open issues");
   });
 });
+
+describe("githubTracker issues()", () => {
+  const lookup = () =>
+    fakeGitHub((body) => {
+      const n = body.variables.number as number;
+      return Response.json({ data: { repository: { issue: n === 404 ? null : issue(n) } } });
+    });
+
+  test("reads each named issue with one lookup, matching owner/repo case-insensitively", async () => {
+    const gh = lookup();
+    const tracker = githubTracker({ owner: "Kit", repo: "Kit", token: "t", fetch: gh.fetch });
+    const tickets = await tracker.issues(["kit/kit#3", "KIT/Kit#12"]);
+    expect(tickets.map((t) => t.key)).toEqual(["Kit/Kit#3", "Kit/Kit#12"]);
+    expect(gh.bodies.map((b) => b.variables)).toEqual([
+      { owner: "Kit", name: "Kit", number: 3 },
+      { owner: "Kit", name: "Kit", number: 12 },
+    ]);
+    expect(gh.bodies[0]?.query.replace(/\s+/g, " ")).toContain(
+      "repository(owner: $owner, name: $name) { issue(number: $number)",
+    );
+  });
+
+  test("refuses keys from another repository or not shaped owner/repo#N, before any request", async () => {
+    const gh = lookup();
+    const tracker = githubTracker({ owner: "kit", repo: "kit", token: "t", fetch: gh.fetch });
+    const err = await caught(tracker.issues(["kit/kit#1", "acme/app#2", "42"]));
+    expect(err.message).toBe(
+      "acme/app#2, 42 not in kit/kit, the repository this source reads (keys look like kit/kit#123)",
+    );
+    expect(gh.bodies).toHaveLength(0);
+  });
+
+  test("refuses a missing issue", async () => {
+    const gh = lookup();
+    const err = await caught(
+      githubTracker({ owner: "kit", repo: "kit", token: "t", fetch: gh.fetch }).issues(["kit/kit#404"]),
+    );
+    expect(err.message).toBe("GitHub has no issue kit/kit#404");
+  });
+
+  test("refuses a missing issue the way GitHub reports it: null data with a NOT_FOUND error", async () => {
+    const gh = fakeGitHub(() =>
+      Response.json({
+        data: { repository: { issue: null } },
+        errors: [
+          { type: "NOT_FOUND", path: ["repository", "issue"], message: "Could not resolve to an Issue" },
+        ],
+      }),
+    );
+    const err = await caught(
+      githubTracker({ owner: "kit", repo: "kit", token: "t", fetch: gh.fetch }).issues(["kit/kit#5"]),
+    );
+    expect(err.message).toBe("GitHub has no issue kit/kit#5");
+  });
+
+  test("lookup errors name the key being read", async () => {
+    const gh = fakeGitHub(() => new Response("", { status: 500 }));
+    const err = await caught(
+      githubTracker({ owner: "kit", repo: "kit", token: "t", fetch: gh.fetch }).issues(["kit/kit#9"]),
+    );
+    expect(err.message).toBe("GitHub answered HTTP 500 while reading kit/kit#9");
+  });
+});
