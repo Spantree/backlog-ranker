@@ -12,7 +12,7 @@ import { createJevEngine } from "../jev/index.js";
 import { DEFAULT_KEY_VARS } from "../keys.js";
 import { ALLOWLIST_KEY, type Project } from "../loader.js";
 import { RUBRIC_DIR, rubricHash } from "../rubric.js";
-import { githubTracker } from "../trackers/github.js";
+import { trackerFor } from "../trackers/index.js";
 import { FIXTURE_DIR, type RequestCounts, replayFetch } from "./replay.js";
 
 /** {@link rubricHash} of the fixture rubric. */
@@ -30,15 +30,33 @@ export function removeRoot(root: string): void {
   rmSync(root, { recursive: true, force: true });
 }
 
-/** A project at `root` allowing `github:kit/kit`, served by OpenRouter,
- * with a fresh fixture network whose request counts it hands back. */
-export function fixtureProject(root: string): { project: Project; counts: RequestCounts } {
+export interface FixtureProjectOptions {
+  /** The allowlist; `github:kit/kit` by default. */
+  sources?: string[];
+  /** `linear.states` for Linear sources. */
+  linearStates?: string[];
+}
+
+/** A project at `root` allowing `github:kit/kit` (or `sources`), served
+ * by OpenRouter, with a fresh fixture network whose request counts it
+ * hands back. Its tracker serves the GitHub page and the Linear team. */
+export function fixtureProject(
+  root: string,
+  options: FixtureProjectOptions = {},
+): { project: Project; counts: RequestCounts } {
   const net = replayFetch();
+  const sources = options.sources ?? ["github:kit/kit"];
+  const states = options.linearStates;
   const project: Project = {
     projectRoot: root,
     configPath: ".backlog-ranker/config.yaml",
-    config: { sources: ["github:kit/kit"], backend: "openrouter", keys: { ...DEFAULT_KEY_VARS } },
-    sources: ["github:kit/kit"],
+    config: {
+      sources,
+      backend: "openrouter",
+      keys: { ...DEFAULT_KEY_VARS },
+      ...(states === undefined ? {} : { linear: { states } }),
+    },
+    sources,
     allowlistKey: ALLOWLIST_KEY,
     backend: "openrouter",
     engine: () =>
@@ -48,10 +66,12 @@ export function fixtureProject(root: string): { project: Project; counts: Reques
         fetch: net.fetch,
         retry: { maxRetries: 0 },
       }),
-    tracker: (source) => {
-      if (source.kind !== "github") throw new Error("fixture tracker is GitHub only");
-      return githubTracker({ owner: source.owner, repo: source.repo, token: "t", fetch: net.fetch });
-    },
+    tracker: (source) =>
+      trackerFor(source, {
+        token: "t",
+        fetch: net.fetch,
+        ...(states === undefined ? {} : { linearStates: states }),
+      }),
   };
   return { project, counts: net.counts };
 }

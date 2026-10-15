@@ -95,8 +95,9 @@ async function prepare(
   const project = await deps.resolve(deps.cwd(), io.env, run.load ?? {});
   assertAllowed(source, project.sources, project.allowlistKey);
   if (run.load?.allowOnce !== undefined) {
+    const issues = source.kind === "github" ? "open issues" : "pending issues";
     io.stderr(
-      `the titles, bodies and labels of open issues in ${source.spec} will be sent to ` +
+      `the titles, bodies and labels of ${issues} in ${source.spec} will be sent to ` +
         `${project.backend} for this run only; nothing is saved to config\n`,
     );
   }
@@ -216,7 +217,7 @@ function explainVerb(deps: VerbDeps): VerbHandler {
     const rubric = flags.required("rubric");
     const [keyArg, ...extra] = flags.positionals;
     if (keyArg === undefined || extra.length > 0) {
-      throw flags.error("explain takes exactly one issue key, such as octocat/hello-world#1");
+      throw flags.error("explain takes exactly one issue key, such as octocat/hello-world#1 or ENG-12");
     }
     const { source, key } = parseIssueKey(keyArg);
     const p = await prepare(deps, io, { source, rubric });

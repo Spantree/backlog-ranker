@@ -20,7 +20,7 @@ export function isVerb(word: string): word is Verb {
 export const USAGE = `usage: backlog-ranker <verb> [options]
 
 verbs:
-  rank       Rank a source's open tickets against a rubric
+  rank       Rank a source's pending tickets against a rubric
   calibrate  Compare the tool's ranking with a hand ranking
   explain    Show one ticket's scores, gates and flags
 
@@ -33,7 +33,7 @@ export const VERB_USAGE: Record<Verb, string> = {
   rank: `usage: backlog-ranker rank --rubric <name|path> --source <spec> [options]
 
 ${RUBRIC_HELP}
-  -s, --source <spec>     github:owner/repo (linear:TEAM is planned)
+  -s, --source <spec>     github:owner/repo or linear:TEAM
   -w, --weight <id=n>     Override a criterion weight; repeatable
   -t, --tiebreak <n>      Pairwise tie-break depth
       --concurrency <n>   Parallel engine requests
@@ -44,20 +44,23 @@ ${RUBRIC_HELP}
   calibrate: `usage: backlog-ranker calibrate --rubric <name|path> --source <spec> --hand KEY,KEY,... [options]
 
 ${RUBRIC_HELP}
-  -s, --source <spec>     github:owner/repo (linear:TEAM is planned)
-      --hand <keys>       Hand ranking, best first, comma separated
+  -s, --source <spec>     github:owner/repo or linear:TEAM
+      --hand <keys>       Hand ranking, best first, comma separated: owner/repo#123
+                          or TEAM-123 keys, or bare 123 within the source
   -w, --weight <id=n>     Override a criterion weight; repeatable
   -j, --json              Machine-readable output
   -h, --help              This text
 
 Exits 2 when the tool's ranking is not trusted.`,
-  explain: `usage: backlog-ranker explain --rubric <name|path> <owner/repo#123> [options]
+  explain: `usage: backlog-ranker explain --rubric <name|path> <owner/repo#123|TEAM-123> [options]
 
 ${RUBRIC_HELP}
   -j, --json              Machine-readable output
   -h, --help              This text
 
-Decision-model answers come from the cache after a rank; one GitHub lookup reads the issue.`,
+The key names its source: owner/repo#123 is github:owner/repo, TEAM-123 is
+linear:TEAM; either must be on the allowlist. Decision-model answers come from
+the cache after a rank; one tracker lookup reads the issue, in any state.`,
 };
 
 /** Flags each verb accepts; anything else is refused as a usage error. */
