@@ -61,7 +61,7 @@ describe("refusals", () => {
     expect(c.err()).not.toMatch(/^\s+at /m);
   });
 
-  test.each(["rank", "calibrate", "explain"])("%s is not implemented yet and refuses", async (verb) => {
+  test.each(["calibrate", "explain"])("%s is not implemented yet and refuses", async (verb) => {
     const c = capture();
     expect(await run([verb], c.io)).toBe(1);
     expect(c.err()).toStartWith("RefusalError: ");
