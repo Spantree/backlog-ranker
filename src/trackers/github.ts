@@ -12,8 +12,17 @@ import type { Ticket } from "../ticket.js";
 import type { FetchFn, Tracker } from "./tracker.js";
 
 export const GITHUB_GRAPHQL_ENDPOINT = "https://api.github.com/graphql";
-const PAGE_SIZE = 100;
+/** Issues per page. Busy repositories (thousands of open issues, each
+ * with dozens of timeline events) push a page past GitHub's resource
+ * limits or its gateway timeout, so a refused page is asked again at half
+ * the size, down to the smallest, and paging goes on at the size that
+ * worked. */
+const PAGE_SIZE = 50;
+const MIN_PAGE_SIZE = 12;
 const DEFAULT_TIMEOUT_MS = 30_000;
+/** A 502, 503 or 504 is asked again this many times, after 1 s, then 2 s. */
+const RETRIES = 2;
+const DEFAULT_RETRY_DELAY_MS = 1000;
 
 export interface GitHubTrackerOptions {
   owner: string;
@@ -25,13 +34,20 @@ export interface GitHubTrackerOptions {
   tokenEnvVar?: string;
   /** Per-request timeout; 30 seconds by default. */
   timeoutMs?: number;
+  /** The first wait before asking again after a gateway error; it doubles
+   * on each retry. 1 second by default. */
+  retryDelayMs?: number;
 }
 
 /** Linked issues count cross-references and connections whose other end
  * is an issue, plus sub-issues; pull requests and the parent do not count.
- * Blockers and closing pull requests are filtered to open ones in code:
- * `blockedBy` takes no state argument, and closing references can be
- * MERGED. Drafts are OPEN, so they count. */
+ * A cross-reference is told apart by its path, whose anchor names the
+ * kind of item that made it (`#ref-issue-…`, `#ref-pullrequest-…`):
+ * resolving each reference's source is what pushes a busy repository's
+ * page past GitHub's resource limits. Open blockers come counted from the
+ * dependency summary; closing pull requests are filtered to open ones in
+ * code, since closing references can be MERGED. Drafts are OPEN, so they
+ * count. */
 const ISSUE_FIELDS = `id number title body url createdAt
   labels(first: 100) { nodes { name } }
   reactions { totalCount }
@@ -39,17 +55,17 @@ const ISSUE_FIELDS = `id number title body url createdAt
   timelineItems(itemTypes: [CROSS_REFERENCED_EVENT, CONNECTED_EVENT, MARKED_AS_DUPLICATE_EVENT], first: 100) {
     nodes {
       __typename
-      ... on CrossReferencedEvent { source { __typename ... on Node { id } } }
+      ... on CrossReferencedEvent { resourcePath }
       ... on ConnectedEvent { source { __typename ... on Node { id } } subject { __typename ... on Node { id } } }
     }
   }
   subIssues { totalCount }
-  blockedBy(first: 100) { nodes { state } }
-  closedByPullRequestsReferences(first: 100, includeClosedPrs: false) { nodes { state } }`;
+  issueDependenciesSummary { blockedBy }
+  closedByPullRequestsReferences(first: 10, includeClosedPrs: false) { nodes { state } }`;
 
-const PENDING_QUERY = `query($owner: String!, $name: String!, $after: String) {
+const PENDING_QUERY = `query($owner: String!, $name: String!, $first: Int!, $after: String) {
   repository(owner: $owner, name: $name) {
-    issues(states: OPEN, first: ${PAGE_SIZE}, after: $after) {
+    issues(states: OPEN, first: $first, after: $after) {
       pageInfo { hasNextPage endCursor }
       nodes { ${ISSUE_FIELDS} }
     }
@@ -68,6 +84,7 @@ interface Subject {
 
 interface TimelineNode {
   __typename: string;
+  resourcePath?: string;
   source?: Subject | null;
   subject?: Subject | null;
 }
@@ -84,7 +101,7 @@ interface IssueNode {
   assignees: { totalCount: number };
   timelineItems: { nodes: (TimelineNode | null)[] };
   subIssues: { totalCount: number };
-  blockedBy: { nodes: ({ state: string } | null)[] };
+  issueDependenciesSummary: { blockedBy: number };
   closedByPullRequestsReferences: { nodes: ({ state: string } | null)[] };
 }
 
@@ -110,12 +127,24 @@ interface PendingPage {
   };
 }
 
+/** What may still get a refused request through: asking again as it is
+ * (a gateway error), or asking for a smaller page (a page too heavy for
+ * GitHub's resource limits or its gateway timeout). */
+interface Recovery {
+  retry?: boolean;
+  smaller?: boolean;
+}
+
 /** A tracker failure. Value-free: it names the operation and the HTTP
  * status, never the token or any text from GitHub's reply. */
 export class GitHubTrackerError extends RefusalError {
-  constructor(message: string) {
+  readonly retry: boolean;
+  readonly smaller: boolean;
+  constructor(message: string, recovery: Recovery = {}) {
     super(message);
     this.name = "GitHubTrackerError";
+    this.retry = recovery.retry ?? false;
+    this.smaller = recovery.smaller ?? false;
   }
 }
 
@@ -162,11 +191,18 @@ function refusalFor(
   timeoutMs: number,
 ): GitHubTrackerError {
   if (timedOut(err)) {
-    return new GitHubTrackerError(`GitHub did not answer within ${duration(timeoutMs)} while ${operation}`);
+    return new GitHubTrackerError(`GitHub did not answer within ${duration(timeoutMs)} while ${operation}`, {
+      smaller: true,
+    });
   }
   if (err instanceof GraphqlResponseError) {
-    if (err.errors?.some((e) => (e as { type?: unknown }).type === "RATE_LIMITED")) {
-      return rateLimitRefusal(operation);
+    const types = (err.errors ?? []).map((e) => (e as { type?: unknown }).type);
+    if (types.includes("RATE_LIMITED")) return rateLimitRefusal(operation);
+    if (types.includes("RESOURCE_LIMITS_EXCEEDED")) {
+      return new GitHubTrackerError(
+        `GitHub answered HTTP 200 with GraphQL errors (resource limits exceeded) while ${operation}`,
+        { smaller: true },
+      );
     }
     return new GitHubTrackerError(`GitHub answered HTTP 200 with GraphQL errors while ${operation}`);
   }
@@ -180,15 +216,33 @@ function refusalFor(
         `GitHub refused the token while ${operation} (HTTP ${e.status}). ${tokenHint(tokenEnvVar)}`,
       );
     }
-    return new GitHubTrackerError(`GitHub answered HTTP ${e.status} while ${operation}`);
+    // 502 and 504 are GitHub's gateway giving up on a slow query.
+    return new GitHubTrackerError(`GitHub answered HTTP ${e.status} while ${operation}`, {
+      retry: e.status === 502 || e.status === 503 || e.status === 504,
+      smaller: e.status === 502 || e.status === 504,
+    });
   }
   return new GitHubTrackerError(`could not reach GitHub while ${operation}`);
 }
+
+/** A 200 whose body is not GraphQL (an HTML error page): octokit hands
+ * back no data. Treated like a gateway error. */
+const noData = (operation: string) =>
+  new GitHubTrackerError(`GitHub answered HTTP 200 without data while ${operation}`, {
+    retry: true,
+    smaller: true,
+  });
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** The anchor of a cross-reference's path names what made it. */
+const fromAnIssue = (event: TimelineNode) => /#ref-issue-/.test(event.resourcePath ?? "");
 
 /** Whether a cross-reference or connection links this issue to another
  * issue. A connection's own issue may sit at either end, so the other
  * end is the one that is not this issue. */
 function linksAnIssue(event: TimelineNode, self: string): boolean {
+  if (event.__typename === "CrossReferencedEvent") return fromAnIssue(event);
   const ends = [event.source, event.subject].filter((e): e is Subject => e != null && e.id !== self);
   return ends.length === 1 && ends[0]?.__typename === "Issue";
 }
@@ -212,7 +266,7 @@ function toTicket(owner: string, repo: string, node: IssueNode): Ticket {
     reactions: node.reactions.totalCount,
     linkedIssues: linked + node.subIssues.totalCount,
     duplicates: events.filter((e) => e.__typename === "MarkedAsDuplicateEvent").length,
-    openBlockers: openCount(node.blockedBy.nodes),
+    openBlockers: node.issueDependenciesSummary.blockedBy,
     openClosingPrs: openCount(node.closedByPullRequestsReferences.nodes),
     assignees: node.assignees.totalCount,
   };
@@ -222,6 +276,7 @@ export function githubTracker(opts: GitHubTrackerOptions): Tracker {
   const { owner, repo } = opts;
   const tokenEnvVar = opts.tokenEnvVar ?? DEFAULT_KEY_VARS.github;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const retryDelayMs = opts.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
   /** Every request gets its own deadline, covering the body read too. */
   const timed = (input: Parameters<FetchFn>[0], init?: RequestInit) =>
     (opts.fetch ?? globalThis.fetch)(input, { ...init, signal: AbortSignal.timeout(timeoutMs) });
@@ -238,12 +293,19 @@ export function githubTracker(opts: GitHubTrackerOptions): Tracker {
     variables: Record<string, unknown>,
     partial?: (err: GraphqlResponseError<T>) => T | undefined,
   ): Promise<T> {
-    try {
-      return await gh<T>(query, variables);
-    } catch (err) {
-      const accepted = partial && err instanceof GraphqlResponseError ? partial(err) : undefined;
-      if (accepted !== undefined) return accepted;
-      throw refusalFor(err, operation, tokenEnvVar, timeoutMs);
+    for (let attempt = 0; ; attempt++) {
+      let refusal: GitHubTrackerError;
+      try {
+        const data = await gh<T>(query, variables);
+        if (data != null && typeof data === "object") return data;
+        refusal = noData(operation);
+      } catch (err) {
+        const accepted = partial && err instanceof GraphqlResponseError ? partial(err) : undefined;
+        if (accepted !== undefined) return accepted;
+        refusal = refusalFor(err, operation, tokenEnvVar, timeoutMs);
+      }
+      if (!refusal.retry || attempt >= RETRIES) throw refusal;
+      await sleep(retryDelayMs * 2 ** attempt);
     }
   }
 
@@ -252,12 +314,21 @@ export function githubTracker(opts: GitHubTrackerOptions): Tracker {
     async pending() {
       const tickets: Ticket[] = [];
       let after: string | null = null;
+      let first = PAGE_SIZE;
       for (;;) {
-        const page: PendingPage = await call<PendingPage>(
-          `listing ${owner}/${repo}'s open issues`,
-          PENDING_QUERY,
-          { owner, name: repo, after },
-        );
+        let page: PendingPage;
+        try {
+          page = await call<PendingPage>(`listing ${owner}/${repo}'s open issues`, PENDING_QUERY, {
+            owner,
+            name: repo,
+            first,
+            after,
+          });
+        } catch (err) {
+          if (!(err instanceof GitHubTrackerError && err.smaller) || first <= MIN_PAGE_SIZE) throw err;
+          first = Math.max(MIN_PAGE_SIZE, Math.floor(first / 2));
+          continue;
+        }
         const { nodes, pageInfo } = page.repository.issues;
         tickets.push(...nodes.map((n) => toTicket(owner, repo, n)));
         if (!pageInfo.hasNextPage || pageInfo.endCursor === null) break;

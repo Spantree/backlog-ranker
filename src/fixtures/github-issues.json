@@ -34,29 +34,19 @@
               "nodes": [
                 {
                   "__typename": "CrossReferencedEvent",
-                  "source": {
-                    "__typename": "Issue",
-                    "id": "I_kit_4"
-                  }
+                  "resourcePath": "/kit/kit/issues/1#ref-issue-4"
                 },
                 {
                   "__typename": "CrossReferencedEvent",
-                  "source": {
-                    "__typename": "PullRequest",
-                    "id": "PR_kit_10"
-                  }
+                  "resourcePath": "/kit/kit/issues/1#ref-pullrequest-10"
                 }
               ]
             },
             "subIssues": {
               "totalCount": 0
             },
-            "blockedBy": {
-              "nodes": [
-                {
-                  "state": "OPEN"
-                }
-              ]
+            "issueDependenciesSummary": {
+              "blockedBy": 1
             },
             "closedByPullRequestsReferences": {
               "nodes": [
@@ -90,18 +80,15 @@
               "nodes": [
                 {
                   "__typename": "CrossReferencedEvent",
-                  "source": {
-                    "__typename": "PullRequest",
-                    "id": "PR_kit_11"
-                  }
+                  "resourcePath": "/kit/kit/issues/2#ref-pullrequest-11"
                 }
               ]
             },
             "subIssues": {
               "totalCount": 0
             },
-            "blockedBy": {
-              "nodes": []
+            "issueDependenciesSummary": {
+              "blockedBy": 0
             },
             "closedByPullRequestsReferences": {
               "nodes": []
@@ -131,10 +118,7 @@
               "nodes": [
                 {
                   "__typename": "CrossReferencedEvent",
-                  "source": {
-                    "__typename": "Issue",
-                    "id": "I_kit_6"
-                  }
+                  "resourcePath": "/kit/kit/issues/3#ref-issue-6"
                 },
                 {
                   "__typename": "MarkedAsDuplicateEvent"
@@ -144,15 +128,8 @@
             "subIssues": {
               "totalCount": 0
             },
-            "blockedBy": {
-              "nodes": [
-                {
-                  "state": "OPEN"
-                },
-                {
-                  "state": "CLOSED"
-                }
-              ]
+            "issueDependenciesSummary": {
+              "blockedBy": 1
             },
             "closedByPullRequestsReferences": {
               "nodes": []
@@ -184,8 +161,8 @@
             "subIssues": {
               "totalCount": 0
             },
-            "blockedBy": {
-              "nodes": []
+            "issueDependenciesSummary": {
+              "blockedBy": 0
             },
             "closedByPullRequestsReferences": {
               "nodes": []
@@ -213,8 +190,8 @@
             "subIssues": {
               "totalCount": 0
             },
-            "blockedBy": {
-              "nodes": []
+            "issueDependenciesSummary": {
+              "blockedBy": 0
             },
             "closedByPullRequestsReferences": {
               "nodes": []
@@ -246,8 +223,8 @@
             "subIssues": {
               "totalCount": 0
             },
-            "blockedBy": {
-              "nodes": []
+            "issueDependenciesSummary": {
+              "blockedBy": 0
             },
             "closedByPullRequestsReferences": {
               "nodes": [
