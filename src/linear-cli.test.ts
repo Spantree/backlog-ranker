@@ -191,6 +191,12 @@ describe("help", () => {
     expect(cap.stdout()).not.toContain("planned");
   });
 
+  test("rank --help names the Linear key spelling", async () => {
+    const linear = fixture();
+    expect(await linear.cli("rank", "--help")).toBe(0);
+    expect(cap.stdout()).toContain("keyed TEAM-123");
+  });
+
   test("explain --help names both key spellings", async () => {
     const linear = fixture();
     expect(await linear.cli("explain", "--help")).toBe(0);

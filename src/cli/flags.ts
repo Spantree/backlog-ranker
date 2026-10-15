@@ -40,7 +40,11 @@ ${RUBRIC_HELP}
   -j, --json              Machine-readable output
       --allow-once        Admit this source for one run, never persisted
       --backend <name>    With --allow-once and no config: typesafe or openrouter
-  -h, --help              This text`,
+  -h, --help              This text
+
+github:owner/repo ranks the repository's open issues, keyed owner/repo#123.
+linear:TEAM ranks the team's issues in the states linear.states names (Backlog
+and Todo by default), keyed TEAM-123, with the key in LINEAR_API_KEY by default.`,
   calibrate: `usage: backlog-ranker calibrate --rubric <name|path> --source <spec> --hand KEY,KEY,... [options]
 
 ${RUBRIC_HELP}

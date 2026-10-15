@@ -83,8 +83,7 @@ interface Prepared {
  * allowlist, read the rubric, build the tracker then the engine, open the
  * cache. The allowlist is checked before the rubric is read, the tracker
  * is built, or anything leaves the machine; the tracker comes before the
- * engine so an unsupported source says so instead of reporting a missing
- * engine key.
+ * engine so a missing tracker key is reported before a missing engine key.
  */
 async function prepare(
   deps: VerbDeps,
