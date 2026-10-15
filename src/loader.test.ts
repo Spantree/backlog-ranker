@@ -129,7 +129,10 @@ describe("loadProject", () => {
   });
 
   test("tracker() refuses naming the token variable and the gh commands", () => {
-    writeConfig("config.yaml", "sources:\n  - github:kit/kit\nbackend: typesafe\nkeys:\n  github: GH_RO_TOKEN\n");
+    writeConfig(
+      "config.yaml",
+      "sources:\n  - github:kit/kit\nbackend: typesafe\nkeys:\n  github: GH_RO_TOKEN\n",
+    );
     const err = refusal(() =>
       loadProject(root, { GITHUB_TOKEN: "t" }).tracker(parseSource("github:kit/kit")),
     );

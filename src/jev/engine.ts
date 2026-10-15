@@ -21,6 +21,7 @@ import {
 } from "@typesafe-ai/sdk";
 import type { DecisionAnswer, DecisionEngine, DecisionQuestion } from "../engine.js";
 import { RefusalError } from "../errors.js";
+import { DEFAULT_KEY_VARS } from "../keys.js";
 import {
   BACKENDS,
   type Backend,
@@ -29,7 +30,6 @@ import {
   isJevModel,
   JEV_MODELS,
 } from "./backends.js";
-import { DEFAULT_KEY_VARS } from "../keys.js";
 import { answerProblem, type JevAnswer, jevResultSchema, servesPinnedModel } from "./validate.js";
 
 export const JEV_ENGINE_ID = "typesafe";
