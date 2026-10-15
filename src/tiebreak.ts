@@ -5,12 +5,13 @@
  * Jev's Choice answers can lean on option order, so every pair is asked
  * in both orders in one request and the two probabilities are averaged.
  * Rows are then reordered by their summed win probability (a Copeland
- * score), within the pinned and unpinned groups separately so a pin
- * still holds. Ties fall back to the composite order.
+ * score), within the pinned, normal and sunk groups separately so a
+ * pin still holds and a sunk row never rises above a normal one. Ties
+ * fall back to the composite order.
  */
 
 import type { AnswerCache } from "./cache.js";
-import type { RankedRow } from "./compose.js";
+import { type RankedRow, rankGroup } from "./compose.js";
 import type { DecisionEngine, DecisionQuestion } from "./engine.js";
 import type { Rubric } from "./rubric.js";
 import { DEFAULT_CONCURRENCY, longestQuestionBytes, pool } from "./score.js";
@@ -135,7 +136,7 @@ export async function tiebreak(opts: {
   const pairs: [RankedRow, RankedRow][] = [];
   for (const [i, a] of slice.entries()) {
     for (const b of slice.slice(i + 1)) {
-      if (a.pinnedBy.length > 0 === b.pinnedBy.length > 0) pairs.push([a, b]);
+      if (rankGroup(a) === rankGroup(b)) pairs.push([a, b]);
     }
   }
   stats.pairs = pairs.length;
@@ -146,8 +147,7 @@ export async function tiebreak(opts: {
   const reordered = slice
     .map((row, order) => ({ row, order, wins: wins.get(row.key) ?? 0 }))
     .sort((x, y) => {
-      const group = Number(y.row.pinnedBy.length > 0) - Number(x.row.pinnedBy.length > 0);
-      return group || y.wins - x.wins || x.order - y.order;
+      return rankGroup(x.row) - rankGroup(y.row) || y.wins - x.wins || x.order - y.order;
     })
     .map((entry) => entry.row);
   return { rows: [...reordered, ...opts.rows.slice(n)], stats };

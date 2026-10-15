@@ -34,7 +34,9 @@ linear:TEAM ranks the team's issues in the states linear.states names (Backlog
 and Todo by default), keyed TEAM-123, with the key in LINEAR_API_KEY by default.
 ```
 
-Ranks every pending issue of the source and prints a table: one row per issue with its composite, each criterion's score and confidence, each gate's probability against its threshold, and its flags. Issues held by a `flag_if_below` gate are listed below the ranking.
+Ranks every pending issue of the source and prints a table: one row per issue with its composite, each criterion's score and confidence, each gate's probability against its threshold, and its flags. Rows are pinned, then normal, then sunk, each by composite. Issues held by a `flag_if_below` gate or a `hold` fact gate are listed below the ranking.
+
+Flags: `pinned:<gate>`, `held:<gate>` (a `flag_if_below` gate or a `hold` fact gate), `sunk:<fact gate>`, `low-confidence:<criterion>` and `truncated`. See [rubrics.md](rubrics.md#fact-gates) for fact gates and their precedence.
 
 - A `github:<owner>/<repo>` source ranks every open issue of the repository (pull requests are never included); keys look like `acme/app#42`.
 - A `linear:<TEAM>` source ranks the team's issues in the workflow states `linear.states` names, Backlog and Todo by default (see [config.md](config.md#linear-states)); keys are Linear identifiers such as `ENG-42`. The team key is case-insensitive and printed uppercase.
@@ -66,7 +68,7 @@ usage: backlog-ranker calibrate --rubric <name|path> --source <spec> --hand KEY,
 Exits 2 when the tool's ranking is not trusted.
 ```
 
-Scores the hand-ranked issues, orders them as `rank` would (held issues after every kept one) and prints both orders side by side with Kendall's tau. When the rubric is not trusted (tau under 0.4, or fewer than 12 issues), it lists the pairs the rubric orders against the hand ranking and exits 2.
+Scores the hand-ranked issues, orders them as `rank` would (pinned, normal and sunk issues, then held issues after every ranked one) and prints both orders side by side with Kendall's tau. When the rubric is not trusted (tau under 0.4, or fewer than 12 issues), it lists the pairs the rubric orders against the hand ranking and exits 2.
 
 `--hand` keys may be written `owner/repo#N` for a GitHub source or `TEAM-N` for a Linear one, or `#N` or `N`, which expand to the source's repository or team. Keys from another repository or team, a repeated key, or fewer than two keys are refused before any request. The named issues are read in any state, so a calibration set may include issues that have since been closed or moved on.
 
@@ -90,7 +92,7 @@ linear:TEAM; either must be on the allowlist. Decision-model answers come from
 the cache after a rank; one tracker lookup reads the issue, in any state.
 ```
 
-Prints one issue's composite, each criterion's per-level probabilities, score and confidence, each gate's probability against its threshold and whether it pinned or held the issue, and its flags. The source is the key's repository (`acme/app#42` is `github:acme/app`) or Linear team (`ENG-42` is `linear:ENG`), which must be on the allowlist, and the header names it. Decision-model answers come from the cache after a rank; one GitHub or Linear lookup reads the issue. Without cached answers, one decision-model request is sent.
+Prints one issue's composite, its facts (age, reactions, linked_issues, duplicates, open_blockers, open_closing_prs, assignees), each criterion's per-level probabilities, score and confidence, each gate's probability against its threshold and whether it pinned or held the issue, each fact gate's value against its `at_least` and its outcome, and its flags. The source is the key's repository (`acme/app#42` is `github:acme/app`) or Linear team (`ENG-42` is `linear:ENG`), which must be on the allowlist, and the header names it. Decision-model answers come from the cache after a rank; one GitHub or Linear lookup reads the issue. Without cached answers, one decision-model request is sent.
 
 ```bash
 backlog-ranker explain -r impact-roi acme/app#42
@@ -123,10 +125,10 @@ A refusal (something you can fix: a usage error, a missing config, an unlisted s
 | `stats` | `tickets`, `requests`, `cachedAnswers`, `askedAnswers`, `truncated` (keys whose body was cut) |
 | `tiebreak` | Present with `--tiebreak`: `pairs`, `requests`, `cacheHits`, `truncatedPairs`, `top` |
 | `ranked` | Rows in order |
-| `held` | Rows held by a `flag_if_below` gate |
+| `held` | Rows held by a `flag_if_below` gate or a `hold` fact gate |
 
-Each row: `position` (1-based; `null` for held rows), `key`, `title`, `url`, `composite`, `pinnedBy`, `heldBy`, `lowConfidence` (gate or criterion ids), `truncated`, and `answers` keyed by criterion or gate id. A criterion answer is `{ "kind": "score", "value", "probabilities", "confidence" }`, where `value` is the probability-weighted level index and `probabilities` lists one probability per level. A gate answer is `{ "kind": "noul", "probability" }`.
+Each row: `position` (1-based; `null` for held rows), `key`, `title`, `url`, `composite`, `pinnedBy`, `heldBy` (gate and fact gate ids), `sunkBy` (fact gate ids), `lowConfidence` (criterion ids), `truncated`, `facts` (`reactions`, `linked_issues`, `duplicates`, `open_blockers`, `open_closing_prs`, `assignees`), and `answers` keyed by criterion or gate id. A criterion answer is `{ "kind": "score", "value", "probabilities", "confidence" }`, where `value` is the probability-weighted level index and `probabilities` lists one probability per level. A gate answer is `{ "kind": "noul", "probability" }`.
 
 `calibrate`: `rubric`, `rubricHash`, `rubricPath`, `configPath`, `source`, `engine`, `model`, `backend`, `hand` (the expanded keys), `tool` (the tool's order of the same keys), `stats`, and the calibration: `n`, `concordant`, `discordant`, `tau`, `trusted`, `disagreements` (`{ "above", "below" }` pairs, the hand ranking's choice first). The exit code is 2 when `trusted` is false, with or without `--json`.
 
-`explain`: `rubric`, `rubricPath`, `rubricHash`, `configPath`, `source`, `engine`, `model`, `backend`, `key`, `title`, `url`, `composite`, `criteria` (each `id`, `direction`, `weight`, `score`, `confidence`, `lowConfidence`, and `levels` as `{ "index", "text", "probability" }`), `gates` (each `id`, `action`, `threshold`, `probability`, `triggered`), `flags` (`pinnedBy`, `heldBy`, `lowConfidence`, `truncated`: the body was cut to fit the prompt) and `stats`.
+`explain`: `rubric`, `rubricPath`, `rubricHash`, `configPath`, `source`, `engine`, `model`, `backend`, `key`, `title`, `url`, `composite`, `criteria` (each `id`, `direction`, `weight`, `score`, `confidence`, `lowConfidence`, and `levels` as `{ "index", "text", "probability" }`), `facts` (`age` and the six numeric facts), `gates` (each `id`, `action`, `threshold`, `probability`, `triggered`), `factGates` (each `id`, `fact`, `action`, `atLeast`, `value`, `fired`, and `outcome`: `held`, `sunk` or `none`), `flags` (`pinnedBy`, `heldBy`, `sunkBy`, `lowConfidence`, `truncated`: the body was cut to fit the prompt) and `stats`.

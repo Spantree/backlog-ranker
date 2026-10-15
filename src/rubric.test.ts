@@ -57,6 +57,70 @@ describe("parseRubric", () => {
     expect(() => parseRubric(text, "m")).toThrow('duplicate id "impact"');
   });
 
+  test("parses fact gates, and a rubric without them has none", () => {
+    const text = minimal(`fact_gates:
+  - id: blocked
+    fact: open_blockers
+    at_least: 1
+    action: sink
+  - id: assigned
+    fact: assignees
+    at_least: 2
+    action: hold
+`);
+    expect(parseRubric(text, "m").fact_gates).toEqual([
+      { id: "blocked", fact: "open_blockers", at_least: 1, action: "sink" },
+      { id: "assigned", fact: "assignees", at_least: 2, action: "hold" },
+    ]);
+    expect(parseRubric(minimal(), "m").fact_gates).toEqual([]);
+  });
+
+  const factGate = (fields: string): string =>
+    minimal(
+      `fact_gates:\n  - id: g\n${fields
+        .split("\n")
+        .map((l) => `    ${l}`)
+        .join("\n")}\n`,
+    );
+
+  test.each([
+    ["an unknown fact", "fact: stars\nat_least: 1\naction: hold", "fact_gates.0.fact"],
+    ["a negative at_least", "fact: reactions\nat_least: -1\naction: hold", "fact_gates.0.at_least"],
+    ["a fractional at_least", "fact: reactions\nat_least: 1.5\naction: hold", "fact_gates.0.at_least"],
+    [
+      "an at_least of 0, which every ticket meets",
+      "fact: reactions\nat_least: 0\naction: hold",
+      "fact_gates.0.at_least",
+    ],
+    ["a missing at_least", "fact: reactions\naction: hold", "fact_gates.0.at_least"],
+    ["an unknown action", "fact: reactions\nat_least: 1\naction: pin_top", "fact_gates.0.action"],
+    ["an unknown field", "fact: reactions\nat_least: 1\naction: hold\nwhen: always", "fact_gates.0"],
+  ])("refuses %s, naming the field", (_, fields, path) => {
+    let err: unknown;
+    try {
+      parseRubric(factGate(fields), "m.yaml");
+    } catch (e) {
+      err = e;
+    }
+    expect(isRefusal(err)).toBe(true);
+    expect((err as Error).message).toContain(`  ${path}`);
+  });
+
+  test("refuses a fact gate id already used by a criterion, a gate or another fact gate", () => {
+    const gate = (id: string): string =>
+      `  - id: ${id}\n    fact: reactions\n    at_least: 1\n    action: sink\n`;
+    expect(() => parseRubric(minimal(`fact_gates:\n${gate("impact")}`), "m")).toThrow(
+      'fact_gates.0.id: duplicate id "impact"',
+    );
+    const withGate = minimal(
+      `gates:\n  - id: security\n    question: q?\n    action: pin_top\nfact_gates:\n${gate("security")}`,
+    );
+    expect(() => parseRubric(withGate, "m")).toThrow('fact_gates.0.id: duplicate id "security"');
+    expect(() => parseRubric(minimal(`fact_gates:\n${gate("x")}${gate("x")}`), "m")).toThrow(
+      'fact_gates.1.id: duplicate id "x"',
+    );
+  });
+
   test("roi needs both a weighted benefit and a weighted cost", () => {
     expect(() => parseRubric(minimal().replace("weighted_sum", "roi"), "m")).toThrow(
       "roi needs at least one weighted cost criterion",

@@ -129,8 +129,10 @@ function rankJson(ranking: Ranking): { ranked: unknown[]; held: unknown[] } {
     composite: r.composite,
     pinnedBy: r.pinnedBy,
     heldBy: r.heldBy,
+    sunkBy: r.sunkBy,
     lowConfidence: r.lowConfidence,
     truncated: r.truncated,
+    facts: r.facts,
     answers: r.answers,
   });
   return {

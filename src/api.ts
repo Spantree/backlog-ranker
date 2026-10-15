@@ -8,14 +8,14 @@
 
 import { readFileSync } from "node:fs";
 import type { AnswerCache } from "./cache.js";
-import { type Ranking, rank, type Scored } from "./compose.js";
+import { factGateFires, type Ranking, rank, type Scored } from "./compose.js";
 import type { DecisionEngine } from "./engine.js";
 import { RefusalError } from "./errors.js";
 import { type Calibration, kendallTau } from "./kendall.js";
-import { type Gate, parseRubric, type Rubric, withWeights } from "./rubric.js";
+import { type FactGate, type Gate, parseRubric, type Rubric, withWeights } from "./rubric.js";
 import { type ScoreStats, scoreTickets } from "./score.js";
-import type { TicketState } from "./state.js";
-import type { Ticket } from "./ticket.js";
+import type { AgeBucket, TicketState } from "./state.js";
+import { type Ticket, type TicketFacts, ticketFacts } from "./ticket.js";
 import { MAX_TIEBREAK, type TiebreakStats, tiebreak } from "./tiebreak.js";
 import type { Tracker } from "./trackers/tracker.js";
 
@@ -189,16 +189,39 @@ export interface ExplainedGate {
   triggered: boolean;
 }
 
+export interface ExplainedFactGate {
+  id: string;
+  fact: FactGate["fact"];
+  action: FactGate["action"];
+  atLeast: number;
+  /** The ticket's value of `fact`. */
+  value: number;
+  /** Whether the fact is at least `atLeast`. */
+  fired: boolean;
+  /** What the gate did: a fired sink on a pinned ticket does nothing. */
+  outcome: "held" | "sunk" | "none";
+}
+
 export interface ExplainResult {
   rubric: Rubric;
   key: string;
   title: string;
   url: string;
   composite: number;
+  /** Every fact code counted: the age bucket and the numeric facts,
+   * including those only fact gates read and the model never sees. */
+  facts: { age: AgeBucket } & TicketFacts;
   criteria: ExplainedCriterion[];
   gates: ExplainedGate[];
+  factGates: ExplainedFactGate[];
   /** `truncated`: the body was cut to fit the prompt budget. */
-  flags: { pinnedBy: string[]; heldBy: string[]; lowConfidence: string[]; truncated: boolean };
+  flags: {
+    pinnedBy: string[];
+    heldBy: string[];
+    sunkBy: string[];
+    lowConfidence: string[];
+    truncated: boolean;
+  };
   stats: ScoreStats;
 }
 
@@ -218,7 +241,7 @@ export async function explainTicket(opts: ExplainOptions): Promise<ExplainResult
     } else {
       throw new RefusalError("pass either a ticket, or a tracker and a key");
     }
-    const { scored, stats } = await scoreTickets({
+    const { scored, states, stats } = await scoreTickets({
       tickets: [ticket],
       rubric,
       engine: opts.engine,
@@ -252,17 +275,35 @@ export async function explainTicket(opts: ExplainOptions): Promise<ExplainResult
         triggered: row.pinnedBy.includes(g.id) || row.heldBy.includes(g.id),
       };
     });
+    const facts = ticketFacts(ticket);
+    const factGates = rubric.fact_gates.map((g): ExplainedFactGate => {
+      const outcome = row.heldBy.includes(g.id) ? "held" : row.sunkBy.includes(g.id) ? "sunk" : "none";
+      return {
+        id: g.id,
+        fact: g.fact,
+        action: g.action,
+        atLeast: g.at_least,
+        value: facts[g.fact],
+        fired: factGateFires(g, row),
+        outcome,
+      };
+    });
+    const age = states.get(ticket.key)?.facts.age;
+    if (age === undefined) throw new Error(`${ticket.key} was scored without a state`);
     return {
       rubric,
       key: row.key,
       title: row.title,
       url: row.url,
       composite: row.composite,
+      facts: { age, ...facts },
       criteria,
       gates,
+      factGates,
       flags: {
         pinnedBy: row.pinnedBy,
         heldBy: row.heldBy,
+        sunkBy: row.sunkBy,
         lowConfidence: row.lowConfidence,
         truncated: row.truncated,
       },

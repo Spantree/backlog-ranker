@@ -5,6 +5,7 @@ export {
   calibrateBacklog,
   type DecisionRunOptions,
   type ExplainedCriterion,
+  type ExplainedFactGate,
   type ExplainedGate,
   type ExplainedLevel,
   type ExplainOptions,
@@ -69,6 +70,7 @@ export { type Calibration, kendallTau, TRUST_MIN_TICKETS, TRUST_TAU } from "./ke
 export { ALLOWLIST_KEY, LoaderError, type LoadOptions, loadProject, type Project } from "./loader.js";
 export {
   type Criterion,
+  type FactGate,
   type Gate,
   type LoadedRubric,
   loadRubric,
@@ -111,7 +113,7 @@ export {
   utf8Bytes,
 } from "./state.js";
 export { type RunHeader, renderExplain, renderTable } from "./table.js";
-export type { Ticket } from "./ticket.js";
+export { FACT_NAMES, type FactName, type Ticket, type TicketFacts, ticketFacts } from "./ticket.js";
 export { MAX_TIEBREAK, type TiebreakStats, tiebreak } from "./tiebreak.js";
 export {
   GITHUB_GRAPHQL_ENDPOINT,
