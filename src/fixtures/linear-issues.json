@@ -267,7 +267,14 @@
           },
           "reactions": [],
           "relations": {
-            "nodes": []
+            "nodes": [
+              {
+                "type": "duplicate"
+              },
+              {
+                "type": "similar"
+              }
+            ]
           },
           "inverseRelations": {
             "nodes": []
@@ -293,7 +300,24 @@
             "nodes": []
           },
           "inverseRelations": {
-            "nodes": []
+            "nodes": [
+              {
+                "type": "duplicate",
+                "issue": {
+                  "state": {
+                    "type": "duplicate"
+                  }
+                }
+              },
+              {
+                "type": "similar",
+                "issue": {
+                  "state": {
+                    "type": "backlog"
+                  }
+                }
+              }
+            ]
           },
           "assignee": null,
           "state": {

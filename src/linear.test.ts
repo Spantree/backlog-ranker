@@ -38,8 +38,13 @@ const node = (identifier: string, extra: Record<string, unknown> = {}): Record<s
   createdAt: "2026-10-01T00:00:00.000Z",
   labels: { nodes: [{ name: "Bug" }] },
   reactions: [{ id: "r" }],
-  relations: { nodes: [{ type: "duplicate" }, { type: "related" }] },
-  inverseRelations: { nodes: [{ type: "blocks", issue: { state: { type: "unstarted" } } }] },
+  relations: { nodes: [{ type: "related" }] },
+  inverseRelations: {
+    nodes: [
+      { type: "blocks", issue: { state: { type: "unstarted" } } },
+      { type: "duplicate", issue: { state: { type: "duplicate" } } },
+    ],
+  },
   assignee: null,
   ...extra,
 });
@@ -204,6 +209,52 @@ describe("pending()", () => {
       linkedIssues: 0,
       duplicates: 0,
     });
+  });
+
+  test("duplicates counts only issues marked duplicates of this one, never this one being a duplicate", async () => {
+    const linear = fakeLinear(
+      pageOf(
+        // EVA-1 is the canonical: two other issues are marked duplicates of it.
+        node("EVA-1", {
+          relations: { nodes: [] },
+          inverseRelations: { nodes: [blocker("duplicate", "duplicate"), blocker("duplicate", "canceled")] },
+        }),
+        // EVA-2 is itself the duplicate: its own relation points at the canonical.
+        node("EVA-2", { relations: { nodes: [{ type: "duplicate" }] }, inverseRelations: { nodes: [] } }),
+      ),
+    );
+    const tickets = await linearTracker({ team: "EVA", apiKey: "k", fetch: linear.fetch }).pending();
+    expect(tickets.map((t) => [t.key, t.duplicates, t.linkedIssues])).toEqual([
+      ["EVA-1", 2, 2],
+      ["EVA-2", 0, 1],
+    ]);
+  });
+
+  test("linked issues leave out Linear's AI-suggested similar relations, in either direction", async () => {
+    const linear = fakeLinear(
+      pageOf(
+        node("EVA-1", {
+          relations: { nodes: [{ type: "similar" }, { type: "related" }, { type: "blocks" }] },
+          inverseRelations: { nodes: [blocker("similar", "backlog"), blocker("duplicate", "duplicate")] },
+        }),
+      ),
+    );
+    const [ticket] = await linearTracker({ team: "EVA", apiKey: "k", fetch: linear.fetch }).pending();
+    expect(ticket).toMatchObject({ linkedIssues: 3, duplicates: 1 });
+  });
+
+  test("the fixture team's duplicate and similar cases outside the ranked states", async () => {
+    const net = replayFetch();
+    const tickets = await linearTracker({ team: "KIT", apiKey: "k", fetch: net.fetch }).issues([
+      "KIT-9",
+      "KIT-10",
+    ]);
+    // KIT-9 is a duplicate of another issue and has a similar suggestion;
+    // KIT-10 has an issue marked a duplicate of it and a similar suggestion.
+    expect(tickets.map((t) => [t.key, t.linkedIssues, t.duplicates])).toEqual([
+      ["KIT-9", 1, 0],
+      ["KIT-10", 1, 1],
+    ]);
   });
 
   test("pages with the cursor, filters on the matched states and sends the raw key", async () => {

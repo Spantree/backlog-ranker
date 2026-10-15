@@ -27,6 +27,9 @@ const PAGE_SIZE = 100;
 /** Workflow state types that close an issue, so it blocks nothing. */
 const CLOSED_STATE_TYPES = new Set(["completed", "canceled", "duplicate"]);
 const DEFAULT_TIMEOUT_MS = 30_000;
+/** Relation types that link issues. `similar` is left out: Linear's AI
+ * suggests it, so it says nothing a person decided. */
+const LINKED_RELATION_TYPES = new Set(["blocks", "duplicate", "related"]);
 
 export interface LinearTrackerOptions {
   /** The team key, as in `linear:<TEAM>`. */
@@ -132,7 +135,9 @@ export function linearKeyHint(apiKeyVar: string): string {
 const AUTH_CODES = new Set(["AUTHENTICATION_ERROR", "FORBIDDEN"]);
 
 function toTicket(node: IssueNode): Ticket {
-  const relations = [...node.relations.nodes, ...node.inverseRelations.nodes];
+  const linked = [...node.relations.nodes, ...node.inverseRelations.nodes].filter((r) =>
+    LINKED_RELATION_TYPES.has(r.type),
+  );
   return {
     key: node.identifier,
     title: node.title,
@@ -141,8 +146,11 @@ function toTicket(node: IssueNode): Ticket {
     url: node.url,
     createdAt: node.createdAt,
     reactions: node.reactions.length,
-    linkedIssues: relations.length,
-    duplicates: relations.filter((r) => r.type === "duplicate").length,
+    linkedIssues: linked.length,
+    // A relation reads "issue <type> relatedIssue": on "A duplicate B", A
+    // is the duplicate and B the canonical, so only B's inverse relations
+    // count issues marked duplicates of it.
+    duplicates: node.inverseRelations.nodes.filter((r) => r.type === "duplicate").length,
     openBlockers: node.inverseRelations.nodes.filter(
       (r) => r.type === "blocks" && !CLOSED_STATE_TYPES.has(r.issue.state.type),
     ).length,
