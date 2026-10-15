@@ -55,7 +55,7 @@ It runs scoring and a top-10 tie-break over the fixture issues against a cold ca
 
 ### Issue tracker
 
-Issues and specs live as local markdown under `.scratch/<feature>/` (no remote yet). See `docs/agents/issue-tracker.md`.
+Issues and specs live in GitHub Issues on Spantree/backlog-decisions, via `gh`. The first spec and its tickets predate the remote and stay resolved under `.scratch/extract-backlog-decisions/` as history. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
