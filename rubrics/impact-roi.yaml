@@ -69,19 +69,15 @@ gates:
     action: flag_if_below
     threshold: 0.5
 # Optional: rules on facts counted in code, applied without asking the
-# model, so editing them never sends a request. Delete either to turn it
-# off. A ticket blocked by an open issue sinks below every ticket that is
-# neither pinned nor sunk (a pin wins); a ticket with an open pull request
-# set to close it is already in progress and is held for a human, even
-# when pinned. Some teams also hold assigned tickets
-# (fact: assignees, at_least: 1, action: hold); see docs/rubrics.md.
+# model, so editing them never sends a request. Delete it to turn it off.
+# A ticket blocked by an open issue sinks below every ticket that is
+# neither pinned nor sunk (a pin wins). Tickets already being worked on
+# stay ranked; a team that wants them held for a human can add a hold on
+# open_closing_prs or assignees (at_least: 1, action: hold); see
+# docs/rubrics.md.
 fact_gates:
   - id: blocked
     fact: open_blockers
     at_least: 1
     action: sink
-  - id: in_progress
-    fact: open_closing_prs
-    at_least: 1
-    action: hold
 tiebreak_question: Which ticket gives the project's users more value for the engineering work it takes?

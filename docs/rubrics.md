@@ -96,7 +96,7 @@ fact_gates:
 - `hold`: the issue is held out of the ranking for a human, flagged `held:<id>`, beside the issues a `flag_if_below` gate held.
 - `sink`: the issue stays ranked but goes below every issue that is neither pinned nor sunk, flagged `sunk:<id>`.
 
-The shipped `impact-roi` rubric carries the two gates above; both are optional, delete either to turn it off. Whether an assignee means "in progress" differs by team, so it does not gate on assignees. A team that treats an assigned issue as started can add:
+The shipped `impact-roi` rubric carries only the `blocked` gate; delete it to turn it off. It does not hold work already in progress: whether an open closing pull request or an assignee means a ticket should leave the ranking differs by team, so `in_progress` above is an example to add, not a default. A team that treats an assigned issue as started can add:
 
 ```yaml
   - id: assigned
