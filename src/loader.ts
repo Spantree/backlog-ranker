@@ -60,7 +60,9 @@ export function loadProject(cwd: string, env: Readonly<Record<string, string | u
       const keyVar = config.keys[config.backend];
       const apiKey = env[keyVar];
       if (!present(apiKey)) {
-        throw new LoaderError(`${keyVar} is not set: the ${config.backend} backend needs it to score tickets`);
+        throw new LoaderError(
+          `${keyVar} is not set: the ${config.backend} backend needs it to score tickets`,
+        );
       }
       engine = createJevEngine({
         backend: config.backend,
