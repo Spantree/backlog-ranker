@@ -158,7 +158,7 @@ export function createJevEngine(options: JevEngineOptions): DecisionEngine {
   const client = new TypeSafeClient({
     apiKey: options.apiKey,
     baseURL: backend.baseURL,
-    defaultModel: model,
+    defaultModel: backend.requestSpelling(model),
     fetch: bunSafeFetch(options.fetch ?? ((url, init) => globalThis.fetch(url, init))),
     // OpenRouter is not known to accept zstd request bodies.
     compression: false,
@@ -179,7 +179,11 @@ export function createJevEngine(options: JevEngineOptions): DecisionEngine {
 
       let raw: unknown;
       try {
-        raw = await client.systemOne({ model, state: state as NonNullable<EntryType>, questions: wire });
+        raw = await client.systemOne({
+          model: backend.requestSpelling(model),
+          state: state as NonNullable<EntryType>,
+          questions: wire,
+        });
       } catch (err) {
         throw toJevError(err, backend, keyVar);
       }

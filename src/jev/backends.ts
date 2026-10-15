@@ -1,9 +1,11 @@
 /**
  * Where Jev is served. A BACKEND is a transport: the same Jev model
  * answers the same request whether it arrives at TypeSafe's own API or
- * through OpenRouter. Both take the model id verbatim (`jev-1.14`); they
- * differ in how they REPORT the model that answered, which is what the
- * pinned-version check needs. No custom base URL in this iteration.
+ * through OpenRouter. They differ in how they SPELL the model a request
+ * names (TypeSafe's own API only knows the patch spelling `jev-1.14.0` and
+ * answers 400 "Unknown model" for `jev-1.14`; OpenRouter takes the bare id)
+ * and in how they REPORT the model that answered, which the pinned-version
+ * check needs. No custom base URL in this iteration.
  */
 
 /** The Jev versions a caller may pin. Never a floating alias such as
@@ -30,6 +32,8 @@ export interface Backend {
   readonly name: BackendName;
   /** The SDK's API root; the SDK appends `/v1/systemone`. */
   readonly baseURL: string;
+  /** The model id as this backend expects it in a request. */
+  requestSpelling(model: JevModel): string;
   /** Every spelling under which this backend reports `model` as the one
    * that answered. A dated snapshot suffix on any of them is accepted
    * separately (see `servesPinnedModel`). */
@@ -40,12 +44,16 @@ export const BACKENDS: Readonly<Record<BackendName, Backend>> = {
   typesafe: {
     name: "typesafe",
     baseURL: "https://api.typesafe.ai",
+    // Verified live 2026-10-15: `jev-1.14` is "Unknown model", `jev-1.14.0` answers.
+    requestSpelling: (model) => `${model}.0`,
     // Recorded: `jev-1.14.0`, the release's `.0` patch spelling.
     servedSpellings: (model) => [model, `${model}.0`],
   },
   openrouter: {
     name: "openrouter",
     baseURL: "https://openrouter.ai/api",
+    // OpenRouter maps the bare id onto `typesafe/<id>` (its System One API docs).
+    requestSpelling: (model) => model,
     // Recorded: `typesafe/jev-1.14-20261014`, provider-prefixed and dated.
     servedSpellings: (model) => [model, `typesafe/${model}`],
   },

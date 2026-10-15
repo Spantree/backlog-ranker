@@ -65,7 +65,9 @@ describe("createJevEngine", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe("https://api.typesafe.ai/v1/systemone");
     expect(calls[0]?.headers.get("authorization")).toBe("Bearer k-test");
-    expect(calls[0]?.body.model).toBe("jev-1.14");
+    // TypeSafe's own API only knows the patch spelling: a live request for
+    // `jev-1.14` answers 400 "Unknown model: jev-1.14".
+    expect(calls[0]?.body.model).toBe("jev-1.14.0");
     expect(calls[0]?.body.state).toEqual(STATE);
     expect(calls[0]?.body.questions).toEqual(fixture("request.json").questions);
 
@@ -82,7 +84,7 @@ describe("createJevEngine", () => {
     });
   });
 
-  test("openrouter: same model id verbatim, OpenRouter base URL and key, dated snapshot accepted", async () => {
+  test("openrouter: bare model id, OpenRouter base URL and key, dated snapshot accepted", async () => {
     const { fetch, calls } = replay([json(fixture("openrouter-response.json"))]);
     const engine = createJevEngine({ backend: "openrouter", apiKey: "or-test", fetch });
     const decision = await engine.decide(STATE, QUESTIONS);
@@ -106,7 +108,7 @@ describe("createJevEngine", () => {
       const engine = createJevEngine({ backend, apiKey: "k", fetch, model: "jev-1.13" });
       const decision = await engine.decide(STATE, QUESTIONS);
       expect(engine.model).toBe("jev-1.13");
-      expect(calls[0]?.body.model).toBe("jev-1.13");
+      expect(calls[0]?.body.model).toBe(backend === "typesafe" ? "jev-1.13.0" : "jev-1.13");
       expect(decision.servedModel).toContain("jev-1.13");
     });
 
