@@ -36,6 +36,7 @@ export {
   type LoadedConfig,
   loadConfig,
   parseConfig,
+  readConfig,
 } from "./config.js";
 export type { Decision, DecisionAnswer, DecisionEngine, DecisionQuestion } from "./engine.js";
 export {

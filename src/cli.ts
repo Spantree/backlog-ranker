@@ -76,7 +76,7 @@ const VERB_USAGE: Record<Verb, string> = {
       --concurrency <n>   Parallel engine requests
   -j, --json              Machine-readable output
       --allow-once        Admit this source for one run, never persisted
-      --backend <name>    With --allow-once: typesafe or openrouter
+      --backend <name>    With --allow-once and no config: typesafe or openrouter
   -h, --help              This text`,
   calibrate: `usage: backlog-decisions calibrate --rubric <name> --source <spec> --hand KEY,KEY,... [options]
 

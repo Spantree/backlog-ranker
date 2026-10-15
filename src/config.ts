@@ -105,8 +105,9 @@ export interface LoadedConfig {
   local: boolean;
 }
 
-/** Read the project's config, the local file first. */
-export function loadConfig(projectRoot: string): LoadedConfig {
+/** Read the project's config, the local file first; `undefined` when
+ * neither file exists. */
+export function readConfig(projectRoot: string): LoadedConfig | undefined {
   for (const [path, local] of [
     [LOCAL_CONFIG_PATH, true],
     [CONFIG_PATH, false],
@@ -114,6 +115,13 @@ export function loadConfig(projectRoot: string): LoadedConfig {
     const abs = join(projectRoot, path);
     if (existsSync(abs)) return { config: parseConfig(readFileSync(abs, "utf8"), path), path, local };
   }
+  return undefined;
+}
+
+/** Read the project's config, the local file first; refuses when none exists. */
+export function loadConfig(projectRoot: string): LoadedConfig {
+  const found = readConfig(projectRoot);
+  if (found !== undefined) return found;
   throw new ConfigError(
     `no config: expected ${join(projectRoot, CONFIG_PATH)} (or ${LOCAL_CONFIG_PATH} beside it). ` +
       `A minimal one:\n\n${CONFIG_EXAMPLE}\n`,

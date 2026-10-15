@@ -25,7 +25,7 @@ usage: backlog-decisions rank --rubric <name|path> --source <spec> [options]
       --concurrency <n>   Parallel engine requests
   -j, --json              Machine-readable output
       --allow-once        Admit this source for one run, never persisted
-      --backend <name>    With --allow-once: typesafe or openrouter
+      --backend <name>    With --allow-once and no config: typesafe or openrouter
   -h, --help              This text
 ```
 
@@ -35,7 +35,7 @@ Ranks every open issue of the source (pull requests are never included) and prin
 - `--weight <criterion>=<number>` may repeat; the last value for a criterion wins. It never sends a new request.
 - `--tiebreak` takes 1 to 10. Asks pairwise questions over the top rows; see [rubrics.md](rubrics.md#tie-break).
 - `--concurrency` takes a whole number of at least 1. Default 8.
-- `--allow-once` admits `--source` for this run only and prints what will be sent. `--backend` is accepted only with it, and is required when no config file exists.
+- `--allow-once` admits `--source` for this run only and prints what will be sent. `--backend` applies only with it and only when no config file exists, and is required then; with a config file the committed config chooses the backend and `--backend` is refused.
 
 ```bash
 backlog-decisions rank -r impact-roi -s github:acme/app -w impact=2 -t 5
