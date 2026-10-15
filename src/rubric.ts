@@ -18,6 +18,7 @@ import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 import { RefusalError } from "./errors.js";
 import { sha256 } from "./state.js";
+import { FACT_NAMES } from "./ticket.js";
 
 const ID_RE = /^[a-z][a-z0-9_]{0,39}$/;
 const id = z
@@ -48,6 +49,20 @@ const gateSchema = z
   })
   .strict();
 
+const factGateSchema = z
+  .object({
+    id,
+    /** A numeric fact code counts; the model is never asked. */
+    fact: z.enum(FACT_NAMES),
+    /** The gate fires when the fact is at least this. At least 1: every
+     * ticket has at least 0 of everything, so 0 would fire on all. */
+    at_least: z.number().int().min(1),
+    /** `hold`: out of the ranking for a human, even when pinned. `sink`:
+     * ranked below every row that is neither pinned nor sunk. */
+    action: z.enum(["hold", "sink"]),
+  })
+  .strict();
+
 export const rubricSchema = z
   .object({
     name: z.string().min(1),
@@ -61,15 +76,23 @@ export const rubricSchema = z
     confidence_floor: z.number().min(0).max(1).default(0.5),
     criteria: z.array(criterionSchema).min(1),
     gates: z.array(gateSchema).default([]),
+    /** Rules on facts, applied in code: never a request, never a cache key. */
+    fact_gates: z.array(factGateSchema).default([]),
     /** The question the optional pairwise tie-break asks. */
     tiebreak_question: z.string().min(1).optional(),
   })
   .strict()
   .superRefine((rubric, ctx) => {
     const seen = new Set<string>();
-    for (const item of [...rubric.criteria, ...rubric.gates]) {
-      if (seen.has(item.id)) ctx.addIssue({ code: "custom", message: `duplicate id "${item.id}"` });
-      seen.add(item.id);
+    const ids = [
+      ...rubric.criteria.map((c, i) => [c.id, ["criteria", i, "id"]] as const),
+      ...rubric.gates.map((g, i) => [g.id, ["gates", i, "id"]] as const),
+      ...rubric.fact_gates.map((g, i) => [g.id, ["fact_gates", i, "id"]] as const),
+    ];
+    for (const [itemId, path] of ids) {
+      if (seen.has(itemId))
+        ctx.addIssue({ code: "custom", path: [...path], message: `duplicate id "${itemId}"` });
+      seen.add(itemId);
     }
     if (rubric.compose === "roi") {
       for (const direction of ["benefit", "cost"] as const) {
@@ -89,6 +112,7 @@ export const rubricSchema = z
 export type Rubric = z.infer<typeof rubricSchema>;
 export type Criterion = Rubric["criteria"][number];
 export type Gate = Rubric["gates"][number];
+export type FactGate = Rubric["fact_gates"][number];
 
 export const RUBRIC_DIR = join(".backlog-ranker", "rubrics");
 const NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
