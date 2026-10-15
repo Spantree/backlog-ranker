@@ -11,12 +11,13 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { parse as parseYaml, YAMLError } from "yaml";
+import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 import { RefusalError } from "./errors.js";
 import { BACKEND_NAMES, JEV_MODELS } from "./jev/backends.js";
 import { DEFAULT_KEY_VARS } from "./keys.js";
 import { parseSource } from "./source.js";
+import { yamlSyntaxRefusal } from "./yaml-error.js";
 
 export const CONFIG_DIR = ".backlog-ranker";
 export const CONFIG_PATH = join(CONFIG_DIR, "config.yaml");
@@ -97,22 +98,12 @@ export function findProjectRoot(start: string): string {
   }
 }
 
-/** A syntax refusal names the place and the parser's error code only:
- * the parser's own message quotes the offending line, which may hold a
- * key pasted where a variable name belongs. */
-function yamlRefusal(origin: string, err: unknown): string {
-  if (!(err instanceof YAMLError)) return `${origin} is not valid YAML`;
-  const at = err.linePos?.[0];
-  const where = at === undefined ? "" : ` at line ${at.line}, column ${at.col}`;
-  return `${origin} is not valid YAML${where} (${err.code}); fix the syntax there`;
-}
-
 export function parseConfig(text: string, origin: string): Config {
   let raw: unknown;
   try {
     raw = parseYaml(text);
   } catch (err) {
-    throw new ConfigError(yamlRefusal(origin, err));
+    throw new ConfigError(yamlSyntaxRefusal(origin, err));
   }
   const parsed = configSchema.safeParse(raw);
   if (!parsed.success) {

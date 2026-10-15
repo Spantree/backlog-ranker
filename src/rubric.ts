@@ -19,6 +19,7 @@ import { z } from "zod";
 import { RefusalError } from "./errors.js";
 import { sha256 } from "./state.js";
 import { FACT_NAMES } from "./ticket.js";
+import { yamlSyntaxRefusal } from "./yaml-error.js";
 
 const ID_RE = /^[a-z][a-z0-9_]{0,39}$/;
 const id = z
@@ -129,7 +130,7 @@ export function parseRubric(text: string, origin: string): Rubric {
   try {
     raw = parseYaml(text);
   } catch (err) {
-    throw new RubricError(`${origin} is not valid YAML: ${(err as Error).message}`);
+    throw new RubricError(yamlSyntaxRefusal(origin, err));
   }
   const parsed = rubricSchema.safeParse(raw);
   if (!parsed.success) {

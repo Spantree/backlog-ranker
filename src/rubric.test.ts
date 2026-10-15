@@ -130,6 +130,18 @@ describe("parseRubric", () => {
   test("refuses bad YAML with the file named", () => {
     expect(() => parseRubric("name: [unclosed", "x.yaml")).toThrow("x.yaml is not valid YAML");
   });
+
+  test("a YAML syntax refusal names the place, never the offending line's text", () => {
+    const secret = "sk-or-v1-0123456789abcdef";
+    let message = "";
+    try {
+      parseRubric(`name: t\ncompose: roi: ${secret}\n`, "x.yaml");
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toStartWith("x.yaml is not valid YAML at line 2");
+    expect(message).not.toContain(secret);
+  });
 });
 
 describe("loadRubric", () => {
