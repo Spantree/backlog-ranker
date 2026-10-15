@@ -57,7 +57,7 @@ const { ranking } = await rankBacklog({
 console.log(ranking.ranked.map((row) => row.key));
 ```
 
-`createJevEngine(options)`: `backend` (`"typesafe"` or `"openrouter"`), `apiKey`, and optionally `model` (default `jev-1.14`; an unknown version refuses), `fetch`, `retry` (the SDK's retry policy, partially overridden; by default 408, 429 and 5xx are retried twice with backoff) and `timeoutMs` (per attempt, default 60000).
+`createJevEngine(options)`: `backend` (`"typesafe"` or `"openrouter"`), `apiKey`, and optionally `apiKeyVar` (the variable named when the backend refuses the key, default the backend's entry in `DEFAULT_KEY_VARS`), `model` (default `jev-1.14`; an unknown version refuses), `fetch`, `retry` (the SDK's retry policy, partially overridden; by default 408, 429 and 5xx are retried twice with backoff) and `timeoutMs` (per attempt, default 60000).
 
 `githubTracker(options)`: `owner`, `repo`, `token`, and optionally `fetch` and `tokenEnvVar` (named in auth refusals, default `GITHUB_TOKEN`). `trackerFor(source, options)` builds the tracker for a parsed `SourceRef`.
 

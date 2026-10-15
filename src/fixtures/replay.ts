@@ -53,7 +53,12 @@ const json = (body: unknown, status = 200): Response =>
     headers: { "content-type": "application/json" },
   });
 
-export function replayFetch(): { fetch: ReplayFetch; counts: RequestCounts } {
+export interface ReplayOptions {
+  /** Answer every Jev request with this HTTP status instead of a recording. */
+  jevStatus?: number;
+}
+
+export function replayFetch(options: ReplayOptions = {}): { fetch: ReplayFetch; counts: RequestCounts } {
   const counts: RequestCounts = { github: 0, jev: 0, other: 0 };
   const page = readFileSync(join(FIXTURE_DIR, "github-issues.json"), "utf8");
   const nodes = (JSON.parse(page) as { data: { repository: { issues: { nodes: IssueNode[] } } } }).data
@@ -75,6 +80,7 @@ export function replayFetch(): { fetch: ReplayFetch; counts: RequestCounts } {
       }
       if (JEV_URLS.has(url)) {
         counts.jev++;
+        if (options.jevStatus !== undefined) return json({ error: "replayed status" }, options.jevStatus);
         const { state } = (await bodyOf(init)) as { state: unknown };
         const file = join(FIXTURE_DIR, "jev", jevFixtureName(state));
         if (!existsSync(file)) return json({ error: "no recorded answer for this state" }, 404);

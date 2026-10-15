@@ -29,6 +29,7 @@ import {
   isJevModel,
   JEV_MODELS,
 } from "./backends.js";
+import { DEFAULT_KEY_VARS } from "../keys.js";
 import { answerProblem, type JevAnswer, jevResultSchema, servesPinnedModel } from "./validate.js";
 
 export const JEV_ENGINE_ID = "typesafe";
@@ -40,6 +41,9 @@ export type JevRetryPolicy = Partial<RetryPolicy>;
 export interface JevEngineOptions {
   backend: BackendName;
   apiKey: string;
+  /** The environment variable the key came from, named in refusals;
+   * the backend's default variable when absent. */
+  apiKeyVar?: string;
   /** The Jev version to pin; `DEFAULT_JEV_MODEL` when absent. A string,
    * not `JevModel`, because it usually comes from config: an unknown
    * version refuses here, before any client is built. */
@@ -113,10 +117,10 @@ function fromAnswer(a: JevAnswer, q: DecisionQuestion): DecisionAnswer {
 
 /** An SDK failure as a value-free refusal. The SDK's own messages are not
  * reused: an `APIError` message carries the response body. */
-function toJevError(err: unknown, backend: Backend): JevError {
+function toJevError(err: unknown, backend: Backend, keyVar: string): JevError {
   if (err instanceof JevError) return err;
   if (err instanceof APIError) {
-    const cure = err.status === 401 || err.status === 403 ? `; check ${backend.apiKeyVar}` : "";
+    const cure = err.status === 401 || err.status === 403 ? `; check ${keyVar}` : "";
     return new JevError(`the ${backend.name} backend answered HTTP ${err.status}${cure}`, err.status);
   }
   if (err instanceof APITimeoutError)
@@ -131,12 +135,13 @@ function toJevError(err: unknown, backend: Backend): JevError {
 export function createJevEngine(options: JevEngineOptions): DecisionEngine {
   const backend = BACKENDS[options.backend];
   const model = options.model ?? DEFAULT_JEV_MODEL;
+  const keyVar = options.apiKeyVar ?? DEFAULT_KEY_VARS[options.backend];
   if (!isJevModel(model)) {
     throw new JevError(`unknown Jev model "${model}"; pin one of ${JEV_MODELS.join(", ")}`);
   }
   if (options.apiKey.trim() === "") {
     // The SDK would otherwise fall back to TYPESAFE_API_KEY, the wrong key for OpenRouter.
-    throw new JevError(`no API key for the ${backend.name} backend; set ${backend.apiKeyVar}`);
+    throw new JevError(`no API key for the ${backend.name} backend; set ${keyVar}`);
   }
   const spellings = backend.servedSpellings(model);
   const client = new TypeSafeClient({
@@ -165,7 +170,7 @@ export function createJevEngine(options: JevEngineOptions): DecisionEngine {
       try {
         raw = await client.systemOne({ model, state: state as NonNullable<EntryType>, questions: wire });
       } catch (err) {
-        throw toJevError(err, backend);
+        throw toJevError(err, backend, keyVar);
       }
 
       const parsed = jevResultSchema.safeParse(raw);

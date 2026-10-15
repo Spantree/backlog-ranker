@@ -120,6 +120,7 @@ export function loadProject(
       engine = createJevEngine({
         backend: config.backend,
         apiKey,
+        apiKeyVar: keyVar,
         ...fetchOpt,
         ...(config.model === undefined ? {} : { model: config.model }),
       });

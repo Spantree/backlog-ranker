@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { isRefusal } from "./errors.js";
+import { replayFetch } from "./fixtures/replay.js";
 import { loadProject } from "./loader.js";
 import { parseSource } from "./source.js";
 
@@ -111,6 +112,20 @@ describe("loadProject", () => {
     );
     const engine = loadProject(root, { MY_JEV_KEY: "k" }).engine();
     expect({ id: engine.id, model: engine.model }).toEqual({ id: "typesafe", model: "jev-1.14" });
+  });
+
+  test("a 401 from the backend names the key variable the config renamed", async () => {
+    writeConfig("config.yaml", "sources: []\nbackend: openrouter\nkeys:\n  openrouter: MY_OR_KEY\n");
+    const net = replayFetch({ jevStatus: 401 });
+    const engine = loadProject(root, { MY_OR_KEY: "k" }, { fetch: net.fetch }).engine();
+    const err = await engine.decide({ title: "t" }, { q: { kind: "noul", instructions: "?" } }).then(
+      () => undefined,
+      (e: unknown) => e as Error,
+    );
+    expect(isRefusal(err)).toBe(true);
+    expect(err?.message).toContain("HTTP 401; check MY_OR_KEY");
+    expect(err?.message).not.toContain("OPENROUTER_API_KEY");
+    expect(net.counts.jev).toBe(1);
   });
 
   test("tracker() refuses naming the token variable and the gh commands", () => {

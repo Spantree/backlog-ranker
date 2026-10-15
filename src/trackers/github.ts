@@ -6,6 +6,7 @@
 
 import { GraphqlResponseError, graphql } from "@octokit/graphql";
 import { RefusalError } from "../errors.js";
+import { DEFAULT_KEY_VARS } from "../keys.js";
 import { SourceError, type SourceRef } from "../source.js";
 import type { Ticket } from "../ticket.js";
 import type { Tracker } from "./tracker.js";
@@ -136,7 +137,7 @@ function toTicket(owner: string, repo: string, node: IssueNode): Ticket {
 
 export function githubTracker(opts: GitHubTrackerOptions): Tracker {
   const { owner, repo } = opts;
-  const tokenEnvVar = opts.tokenEnvVar ?? "GITHUB_TOKEN";
+  const tokenEnvVar = opts.tokenEnvVar ?? DEFAULT_KEY_VARS.github;
   const gh = graphql.defaults({
     headers: { authorization: `token ${opts.token}` },
     ...(opts.fetch ? { request: { fetch: opts.fetch } } : {}),
