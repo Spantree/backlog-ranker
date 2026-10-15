@@ -103,6 +103,12 @@ describe("explain", () => {
     expect(stdout()).toContain("Engine: 0 requests; answers from cache 4, asked 0.");
   });
 
+  test("--rubric takes a file path, resolved against the project root", async () => {
+    const path = join(RUBRIC_DIR, "fixture.yaml");
+    expect(await explain("-r", path, "kit/kit#1", "--json")).toBe(0);
+    expect(JSON.parse(stdout())).toMatchObject({ rubricPath: path, rubricHash: FIXTURE_HASH });
+  });
+
   test("a held ticket shows the gate under its threshold and the hold", async () => {
     expect(await explain("-r", "fixture", "kit/kit#5")).toBe(0);
     expect(stdout()).toMatch(/gate judgeable[^\n]*\d\.\d\d < 0\.50: held/);

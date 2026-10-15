@@ -71,6 +71,7 @@ export {
   type Gate,
   type LoadedRubric,
   loadRubric,
+  loadRubricArg,
   loadRubricFile,
   parseRubric,
   RUBRIC_DIR,

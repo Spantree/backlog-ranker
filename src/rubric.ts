@@ -137,10 +137,10 @@ export function isRubricPath(value: string): boolean {
   return value.includes("/") || /\.ya?ml$/.test(value);
 }
 
-/** Read a rubric from a YAML file path, resolved against `cwd`; the
- * header names the path as given. */
-export function loadRubricFile(path: string, cwd: string): LoadedRubric {
-  const abs = resolve(cwd, path);
+/** Read a rubric from a YAML file path, resolved against `base` (the
+ * project root, for the CLI); the header names the path as given. */
+export function loadRubricFile(path: string, base: string): LoadedRubric {
+  const abs = resolve(base, path);
   if (!existsSync(abs)) throw new RubricError(`no rubric file ${path}`);
   const text = readFileSync(abs, "utf8");
   return { rubric: parseRubric(text, path), hash: rubricHash(text), path, local: false };
@@ -167,6 +167,12 @@ export function loadRubric(projectRoot: string, name: string): LoadedRubric {
   const shared = join(RUBRIC_DIR, `${name}.yaml`);
   const local = join(RUBRIC_DIR, `${name}.local.yaml`);
   throw new RubricError(`no rubric "${name}": neither ${shared} nor ${local} exists`);
+}
+
+/** A `--rubric` value: a file path (see {@link isRubricPath}) resolved
+ * against the project root, or a name under `.backlog-decisions/rubrics/`. */
+export function loadRubricArg(projectRoot: string, value: string): LoadedRubric {
+  return isRubricPath(value) ? loadRubricFile(value, projectRoot) : loadRubric(projectRoot, value);
 }
 
 /** Apply `--weight id=value` overrides. Weights are composition inputs

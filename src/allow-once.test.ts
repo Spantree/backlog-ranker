@@ -136,7 +136,7 @@ describe("rank --allow-once", () => {
     expect(readdirSync(root)).toEqual([]);
   });
 
-  test("a relative rubric file path resolves against the working directory", async () => {
+  test("with no root marker, a relative rubric path resolves against the working directory", async () => {
     writeFileSync(join(root, "mine.yml"), readFileSync(RUBRIC_FILE));
     expect(
       await rank("-r", "mine.yml", "-s", "github:kit/kit", "--allow-once", "--backend", "openrouter"),

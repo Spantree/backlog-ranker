@@ -207,6 +207,19 @@ describe("rank", () => {
     expect(counts).toEqual({ github: 0, jev: 0, other: 0 });
   });
 
+  test("a relative rubric path resolves against the project root, not the working directory", async () => {
+    const sub = join(root, "packages", "app");
+    mkdirSync(sub, { recursive: true });
+    const code = await run(["rank", "-r", join(RUBRIC_DIR, "fixture.yaml"), "-s", "github:kit/kit"], io, {
+      resolve: () => resolve(),
+      cwd: () => sub,
+      now: () => FIXTURE_NOW,
+    });
+    expect(stderr()).toBe("");
+    expect(code).toBe(0);
+    expect(stdout()).toContain(`(${join(RUBRIC_DIR, "fixture.yaml")}) (sha ${FIXTURE_HASH})`);
+  });
+
   test("--help prints the verb's usage on stdout and sends nothing", async () => {
     expect(await rank("--help")).toBe(0);
     expect(stdout()).toContain("backlog-decisions rank");

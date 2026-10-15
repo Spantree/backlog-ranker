@@ -14,7 +14,7 @@ import { HelpRequest, isHelpRequest, isRefusal, RefusalError } from "./errors.js
 import { BACKEND_NAMES, type BackendName, isBackendName } from "./jev/backends.js";
 import { TRUST_MIN_TICKETS, TRUST_TAU } from "./kendall.js";
 import { type LoadOptions, loadProject, type Project } from "./loader.js";
-import { isRubricPath, loadRubric, loadRubricFile } from "./rubric.js";
+import { loadRubricArg } from "./rubric.js";
 import { assertAllowed, parseIssueKey, parseSource, type SourceRef } from "./source.js";
 import { grid, renderExplain, renderTable } from "./table.js";
 import { MAX_TIEBREAK } from "./tiebreak.js";
@@ -70,6 +70,7 @@ const VERB_USAGE: Record<Verb, string> = {
   rank: `usage: backlog-decisions rank --rubric <name|path> --source <spec> [options]
 
   -r, --rubric <name>     Rubric under .backlog-decisions/rubrics/, or a YAML file path
+                          (a relative path resolves against the project root)
   -s, --source <spec>     github:owner/repo (linear:TEAM is planned)
   -w, --weight <id=n>     Override a criterion weight; repeatable
   -t, --tiebreak <n>      Pairwise tie-break depth
@@ -78,9 +79,10 @@ const VERB_USAGE: Record<Verb, string> = {
       --allow-once        Admit this source for one run, never persisted
       --backend <name>    With --allow-once and no config: typesafe or openrouter
   -h, --help              This text`,
-  calibrate: `usage: backlog-decisions calibrate --rubric <name> --source <spec> --hand KEY,KEY,... [options]
+  calibrate: `usage: backlog-decisions calibrate --rubric <name|path> --source <spec> --hand KEY,KEY,... [options]
 
-  -r, --rubric <name>     Rubric under .backlog-decisions/rubrics/
+  -r, --rubric <name>     Rubric under .backlog-decisions/rubrics/, or a YAML file path
+                          (a relative path resolves against the project root)
   -s, --source <spec>     github:owner/repo (linear:TEAM is planned)
       --hand <keys>       Hand ranking, best first, comma separated
   -w, --weight <id=n>     Override a criterion weight; repeatable
@@ -88,9 +90,10 @@ const VERB_USAGE: Record<Verb, string> = {
   -h, --help              This text
 
 Exits 2 when the tool's ranking is not trusted.`,
-  explain: `usage: backlog-decisions explain --rubric <name> <owner/repo#123> [options]
+  explain: `usage: backlog-decisions explain --rubric <name|path> <owner/repo#123> [options]
 
-  -r, --rubric <name>     Rubric under .backlog-decisions/rubrics/
+  -r, --rubric <name>     Rubric under .backlog-decisions/rubrics/, or a YAML file path
+                          (a relative path resolves against the project root)
   -j, --json              Machine-readable output
   -h, --help              This text`,
 };
@@ -253,9 +256,7 @@ function rankVerb(deps: VerbDeps): VerbHandler {
           `${project.backend} for this run only; nothing is saved to config\n`,
       );
     }
-    const loaded = isRubricPath(rubricName)
-      ? loadRubricFile(rubricName, deps.cwd())
-      : loadRubric(project.projectRoot, rubricName);
+    const loaded = loadRubricArg(project.projectRoot, rubricName);
     // The tracker first: an unsupported source should say so, not report
     // a missing engine key.
     const tracker = project.tracker(source);
@@ -361,7 +362,7 @@ function calibrateVerb(deps: VerbDeps): VerbHandler {
     // The allowlist is checked before the rubric is read, the tracker is
     // built, or anything leaves the machine.
     assertAllowed(source, project.sources, project.allowlistKey);
-    const loaded = loadRubric(project.projectRoot, rubricName);
+    const loaded = loadRubricArg(project.projectRoot, rubricName);
     const tracker = project.tracker(source);
     const engine = project.engine();
     const cache = openCache(project.projectRoot, engine.id, engine.model, deps.now);
@@ -435,7 +436,7 @@ function explainVerb(deps: VerbDeps): VerbHandler {
     // The allowlist is checked before the rubric is read or anything
     // leaves the machine.
     assertAllowed(source, project.sources, project.allowlistKey);
-    const loaded = loadRubric(project.projectRoot, rubricName);
+    const loaded = loadRubricArg(project.projectRoot, rubricName);
     const tracker = project.tracker(source);
     const engine = project.engine();
     const cache = openCache(project.projectRoot, engine.id, engine.model, deps.now);

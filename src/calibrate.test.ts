@@ -150,6 +150,12 @@ describe("calibrate", () => {
     expect(counts).toEqual({ github: 0, jev: 0, other: 0 });
   });
 
+  test("--rubric takes a file path, resolved against the project root", async () => {
+    const path = join(RUBRIC_DIR, "fixture.yaml");
+    expect(await calibrate("-r", path, "-s", "github:kit/kit", "--hand", SIX, "--json")).toBe(2);
+    expect(JSON.parse(stdout())).toMatchObject({ rubricPath: path, rubricHash: FIXTURE_HASH });
+  });
+
   test("--hand is required", async () => {
     expect(await calibrate("-r", "fixture", "-s", "github:kit/kit")).toBe(1);
     expect(stderr()).toContain("--hand is required");

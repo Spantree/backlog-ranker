@@ -31,7 +31,7 @@ usage: backlog-decisions rank --rubric <name|path> --source <spec> [options]
 
 Ranks every open issue of the source (pull requests are never included) and prints a table: one row per issue with its composite, each criterion's score and confidence, each gate's probability against its threshold, and its flags. Issues held by a `flag_if_below` gate are listed below the ranking.
 
-- `--rubric` takes a name, resolved as `.backlog-decisions/rubrics/<name>.local.yaml` then `<name>.yaml`, or a file path (contains `/` or ends in `.yaml`/`.yml`) resolved against the working directory.
+- `--rubric` takes a name, resolved as `.backlog-decisions/rubrics/<name>.local.yaml` then `<name>.yaml`, or a file path (contains `/` or ends in `.yaml`/`.yml`). A relative path resolves against the project root (the nearest directory holding `.backlog-decisions/` or `.git`), or the working directory when there is none. `calibrate` and `explain` take `--rubric` the same way.
 - `--weight <criterion>=<number>` may repeat; the last value for a criterion wins. It never sends a new request.
 - `--tiebreak` takes 1 to 10. Asks pairwise questions over the top rows; see [rubrics.md](rubrics.md#tie-break).
 - `--concurrency` takes a whole number of at least 1. Default 8.
