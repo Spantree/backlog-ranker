@@ -75,7 +75,9 @@ const tracker = linearTracker({ team: "ENG", apiKey: process.env.LINEAR_API_KEY 
 
 ## rankBacklog
 
-Takes `rubric` (a parsed `Rubric` or a YAML file path), exactly one of `tickets` and `tracker`, `engine`, `cache`, and optionally `now` (the clock that buckets ages), `weights`, `concurrency` (default 8) and `tiebreak` (1 to 10). Returns `rubric` (as applied, overrides included), `ranking` (`ranked` and `held` rows), `states` (each issue's state as sent, by key), `stats`, and `tiebreak` stats when asked.
+Takes `rubric` (a parsed `Rubric` or a YAML file path), exactly one of `tickets` and `tracker`, `engine`, `cache`, and optionally `now` (the clock that buckets ages), `weights`, `concurrency` (default 8) and `tiebreak` (1 to 10). Returns `rubric` (as applied, overrides included), `ranking` (`ranked` rows, pinned then normal then sunk, and `held` rows), `states` (each issue's state as sent, by key), `stats`, and `tiebreak` stats when asked.
+
+Each row (`RankedRow`) carries `key`, `title`, `url`, `composite`, `answers`, `facts` (the numeric facts fact gates read, by rubric name), `pinnedBy`, `heldBy` (`flag_if_below` gates and `hold` fact gates), `sunkBy` (`sink` fact gates, on unpinned rows only), `lowConfidence` and `truncated`. Fact gates never send a request and never change a cache key; see [rubrics.md](rubrics.md#fact-gates) for their precedence over pins and holds.
 
 ## calibrateBacklog
 
@@ -103,7 +105,7 @@ for (const { above, below } of calibration.disagreements) console.log(`${above} 
 
 ## explainTicket
 
-Takes the options every facade shares (`DecisionRunOptions`: `rubric`, `engine`, `cache` and optionally `now`) and either `ticket` or both `tracker` and `key`. Returns the composite, per-criterion `score`, `confidence`, `lowConfidence` and per-level `probability`, per-gate `probability`, `threshold` and `triggered`, `flags` (including `truncated`, when the body was cut to fit the prompt) and `stats`. A rubric can be built in memory with `rubricSchema.parse` (or `parseRubric(yamlText, origin)`), which applies the defaults:
+Takes the options every facade shares (`DecisionRunOptions`: `rubric`, `engine`, `cache` and optionally `now`) and either `ticket` or both `tracker` and `key`. Returns the composite, per-criterion `score`, `confidence`, `lowConfidence` and per-level `probability`, per-gate `probability`, `threshold` and `triggered`, `facts` (the age bucket and every numeric fact, including those only fact gates read), per-fact-gate `fact`, `action`, `atLeast`, `value`, `fired` and `outcome` (`held`, `sunk` or `none`), `flags` (`pinnedBy`, `heldBy`, `sunkBy`, `lowConfidence`, and `truncated`, when the body was cut to fit the prompt) and `stats`. A rubric can be built in memory with `rubricSchema.parse` (or `parseRubric(yamlText, origin)`), which applies the defaults:
 
 ```ts
 import { explainTicket, rubricSchema, type AnswerCache, type DecisionEngine, type Ticket } from "backlog-ranker";
@@ -161,7 +163,7 @@ export const myTracker: Tracker = {
 };
 ```
 
-`pending()` returns every issue to rank; `issues(keys)` returns the named ones, for calibrate and explain. Compute `reactions`, `linkedIssues` and `duplicates` in code: they are sent as facts. Only `title`, `body` and `labels` are sent as text. The allowlist and `loadProject` know only `github:` and `linear:` sources, so a custom tracker is used through the facades directly.
+`pending()` returns every issue to rank; `issues(keys)` returns the named ones, for calibrate and explain. Compute `reactions`, `linkedIssues` and `duplicates` in code: they are sent as facts. `openBlockers`, `openClosingPrs` and `assignees` are optional and are read only by fact gates, never sent to the model; a tracker that leaves them out has them counted as 0, so a fact gate on them never fires. Only `title`, `body` and `labels` are sent as text. The allowlist and `loadProject` know only `github:` and `linear:` sources, so a custom tracker is used through the facades directly.
 
 ## Custom engines
 
@@ -224,4 +226,4 @@ try {
 
 ## Building blocks
 
-Also exported: `parseRubric`, `loadRubric`, `loadRubricFile`, `withWeights`, `rubricHash`; `scoreTickets`, `pool`; `rank`, `compositeOf`, `rubricQuestions`; `tiebreak`, `MAX_TIEBREAK`; `kendallTau`; `toState`, `stateHash`, `canonicalJson` and the prompt budget helpers; `parseSource`, `parseIssueKey` (`owner/repo#123` or `TEAM-123`), `issueKeyIn`, `assertAllowed`; `loadConfig`, `parseConfig`, `configSchema`, `findProjectRoot`; `BACKENDS`, `JEV_MODELS`, `DEFAULT_JEV_MODEL`; `renderTable`, `renderExplain`.
+Also exported: `parseRubric`, `loadRubric`, `loadRubricFile`, `withWeights`, `rubricHash`; `scoreTickets`, `pool`; `rank`, `compositeOf`, `rubricQuestions`; `FACT_NAMES`, `ticketFacts`; `tiebreak`, `MAX_TIEBREAK`; `kendallTau`; `toState`, `stateHash`, `canonicalJson` and the prompt budget helpers; `parseSource`, `parseIssueKey` (`owner/repo#123` or `TEAM-123`), `issueKeyIn`, `assertAllowed`; `loadConfig`, `parseConfig`, `configSchema`, `findProjectRoot`; `BACKENDS`, `JEV_MODELS`, `DEFAULT_JEV_MODEL`; `renderTable`, `renderExplain`.

@@ -74,6 +74,13 @@ as ranking policy. When both exist, the local file is read instead.
    issue out of the ranking for a human below `threshold`. Offer a
    `judgeable` gate ("does the issue say concretely what is wrong and
    what done looks like?") so thin issues do not land mid-ranking.
+   Fact gates (`fact_gates`) act on counts code reads from the tracker
+   without asking the model: `hold` or `sink` an issue when a fact
+   (`open_blockers`, `open_closing_prs`, `assignees`, `reactions`,
+   `linked_issues`, `duplicates`) is `at_least` a whole number of 1 or
+   more. Offer the two `impact-roi` ships (sink blocked issues, hold
+   issues with an open closing pull request); ask before gating on
+   assignees, which means "started" only on some teams.
 4. **Composition.** `roi` (weighted benefit over weighted cost, both
    on a 1-based level scale) or `weighted_sum` (compensating
    criteria, cost flipped). Weights can change later for free; under
@@ -110,7 +117,7 @@ Every row shows each criterion's score (a probability-weighted level
 index, 0 = the first level) with its confidence, and each gate's
 probability beside its threshold. The model returns no reasoning
 text, so that breakdown is the explanation; present it, do not invent
-reasons. Point out the rows that need a human: pinned, held,
+reasons. Point out the rows that need a human: pinned, held, sunk,
 low-confidence (kept in place rather than scored lower) and truncated.
 `--weight` re-ranks from the cache with no new requests; `--tiebreak n`
 reorders the top n (at most 10) with pairwise questions asked in both
