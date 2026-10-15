@@ -9,6 +9,14 @@ type Body = { query: string; variables: Record<string, unknown> };
 
 const ref = (typename: string, id = `${typename}-x`) => ({ __typename: typename, id });
 
+/** A cross-reference as GitHub lists it: the anchor names the kind of item
+ * that made the reference. */
+let refs = 0;
+const crossRef = (kind: "issue" | "pullrequest") => ({
+  __typename: "CrossReferencedEvent",
+  resourcePath: `/o/r/issues/1#ref-${kind}-${++refs}`,
+});
+
 const issue = (n: number, extra: Record<string, unknown> = {}): Record<string, unknown> => ({
   id: `I_${n}`,
   number: n,
@@ -21,15 +29,15 @@ const issue = (n: number, extra: Record<string, unknown> = {}): Record<string, u
   assignees: { totalCount: 2 },
   timelineItems: {
     nodes: [
-      { __typename: "CrossReferencedEvent", source: ref("Issue") },
+      crossRef("issue"),
       { __typename: "ConnectedEvent", source: ref("Issue", `I_${n}`), subject: ref("Issue") },
-      { __typename: "MarkedAsDuplicateEvent" },
-      { __typename: "CrossReferencedEvent", source: ref("Issue") },
+      { __typename: "MarkedAsDuplicateEvent", canonical: { id: `I_${n}` } },
+      crossRef("issue"),
     ],
   },
   subIssues: { totalCount: 2 },
   parent: { number: 1 },
-  blockedBy: { nodes: [{ state: "OPEN" }, { state: "CLOSED" }, { state: "OPEN" }] },
+  issueDependenciesSummary: { blockedBy: 2 },
   closedByPullRequestsReferences: {
     nodes: [
       { state: "OPEN", isDraft: false },
@@ -78,8 +86,8 @@ describe("githubTracker pending()", () => {
     expect(tracker.source).toBe("github:o/r");
     expect(tickets.map((t) => t.key)).toEqual(["o/r#1", "o/r#2", "o/r#7"]);
     expect(gh.bodies).toHaveLength(2);
-    expect(gh.bodies[0]?.variables).toEqual({ owner: "o", name: "r", after: null });
-    expect(gh.bodies[1]?.variables).toEqual({ owner: "o", name: "r", after: "c1" });
+    expect(gh.bodies[0]?.variables).toEqual({ owner: "o", name: "r", first: 50, after: null });
+    expect(gh.bodies[1]?.variables).toEqual({ owner: "o", name: "r", first: 50, after: "c1" });
     expect(gh.headers[0]?.authorization).toBe("token ghp_test");
   });
 
@@ -91,7 +99,7 @@ describe("githubTracker pending()", () => {
     );
     await githubTracker({ owner: "o", repo: "r", token: "t", fetch: gh.fetch }).pending();
     const query = gh.bodies[0]?.query.replace(/\s+/g, " ") ?? "";
-    expect(query).toContain("issues(states: OPEN, first: 100, after: $after)");
+    expect(query).toContain("issues(states: OPEN, first: $first, after: $after)");
     expect(query).not.toContain("pullRequests");
   });
 
@@ -132,8 +140,9 @@ describe("githubTracker pending()", () => {
       subIssues: { totalCount: 0 },
       timelineItems: {
         nodes: [
-          { __typename: "CrossReferencedEvent", source: ref("PullRequest") },
-          { __typename: "CrossReferencedEvent", source: ref("Issue") },
+          crossRef("pullrequest"),
+          crossRef("issue"),
+          { __typename: "CrossReferencedEvent", resourcePath: "/o/r/issues/5#ref-commit-1" },
           { __typename: "ConnectedEvent", source: ref("Issue", "I_5"), subject: ref("PullRequest") },
           { __typename: "ConnectedEvent", source: ref("PullRequest"), subject: ref("Issue", "I_5") },
           { __typename: "ConnectedEvent", source: ref("Issue"), subject: ref("Issue", "I_5") },
@@ -152,10 +161,47 @@ describe("githubTracker pending()", () => {
     expect(t).toMatchObject({ linkedIssues: 2, duplicates: 0 });
   });
 
+  test("duplicates count issues marked as duplicates of this one, never this one marked as a duplicate", async () => {
+    const marked = (canonical: string) => ({
+      __typename: "MarkedAsDuplicateEvent",
+      canonical: { id: canonical },
+    });
+    const unmarked = (canonical: string) => ({
+      __typename: "UnmarkedAsDuplicateEvent",
+      canonical: { id: canonical },
+    });
+    const node = issue(7, {
+      timelineItems: {
+        nodes: [
+          marked("I_7"),
+          marked("I_7"),
+          marked("I_99"),
+          marked("I_7"),
+          unmarked("I_7"),
+          unmarked("I_99"),
+          { __typename: "MarkedAsDuplicateEvent", canonical: null },
+        ],
+      },
+    });
+    const gh = fakeGitHub(() =>
+      Response.json({
+        data: {
+          repository: { issues: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [node] } },
+        },
+      }),
+    );
+    const [t] = await githubTracker({ owner: "o", repo: "r", token: "t", fetch: gh.fetch }).pending();
+    // Three marked as duplicates of #7, one of them unmarked; #7 marked a duplicate of #99 does not count.
+    expect(t?.duplicates).toBe(2);
+    const query = gh.bodies[0]?.query.replace(/\s+/g, " ") ?? "";
+    expect(query).toContain("UNMARKED_AS_DUPLICATE_EVENT");
+    expect(query).toContain("... on MarkedAsDuplicateEvent { canonical { ... on Node { id } } }");
+  });
+
   test("gate-only counts are zero when nothing blocks, closes or is assigned", async () => {
     const node = issue(6, {
       assignees: { totalCount: 0 },
-      blockedBy: { nodes: [{ state: "CLOSED" }] },
+      issueDependenciesSummary: { blockedBy: 0 },
       closedByPullRequestsReferences: { nodes: [{ state: "MERGED", isDraft: false }] },
     });
     const gh = fakeGitHub(() =>
@@ -169,7 +215,7 @@ describe("githubTracker pending()", () => {
     expect(t).toMatchObject({ openBlockers: 0, openClosingPrs: 0, assignees: 0 });
   });
 
-  test("asks for open closing pull requests, blockers with their state, and the assignee count", async () => {
+  test("asks for open closing pull requests, the open blocker count, and the assignee count", async () => {
     const gh = fakeGitHub(() =>
       Response.json({
         data: { repository: { issues: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } } },
@@ -177,10 +223,188 @@ describe("githubTracker pending()", () => {
     );
     await githubTracker({ owner: "o", repo: "r", token: "t", fetch: gh.fetch }).pending();
     const query = gh.bodies[0]?.query.replace(/\s+/g, " ") ?? "";
-    expect(query).toContain("closedByPullRequestsReferences(first: 100, includeClosedPrs: false)");
-    expect(query).toContain("blockedBy(first: 100) { nodes { state } }");
+    expect(query).toContain("closedByPullRequestsReferences(first: 10, includeClosedPrs: false)");
+    expect(query).toContain("issueDependenciesSummary { blockedBy }");
     expect(query).toContain("assignees { totalCount }");
     expect(query).not.toContain("parent");
+  });
+});
+
+describe("githubTracker on busy repositories", () => {
+  const page = (nodes: unknown[], endCursor: string | null = null) =>
+    Response.json({
+      data: { repository: { issues: { pageInfo: { hasNextPage: endCursor !== null, endCursor }, nodes } } },
+    });
+  const resourceLimits = () =>
+    Response.json({
+      data: null,
+      errors: [{ type: "RESOURCE_LIMITS_EXCEEDED", message: "Resource limits for this query exceeded." }],
+    });
+  const sizes = (bodies: Body[]) => bodies.map((b) => b.variables.first);
+  const busy = (fetch: typeof globalThis.fetch) =>
+    githubTracker({ owner: "o", repo: "r", token: "t", fetch, retryDelayMs: 0 });
+
+  test("asks for cross-references by the path that names their source, never resolving the source", async () => {
+    const gh = fakeGitHub(() => page([]));
+    await busy(gh.fetch).pending();
+    const query = gh.bodies[0]?.query.replace(/\s+/g, " ") ?? "";
+    expect(query).toContain("... on CrossReferencedEvent { resourcePath }");
+    expect(query).not.toContain("CrossReferencedEvent { source");
+  });
+
+  test("a page over GitHub's resource limits is asked again at half the size, and paging goes on at that size", async () => {
+    const replies = [resourceLimits, () => page([issue(1)], "c1"), () => page([issue(2)])];
+    const gh = fakeGitHub(() => (replies.shift() as () => Response)());
+    const tickets = await busy(gh.fetch).pending();
+    expect(tickets.map((t) => t.key)).toEqual(["o/r#1", "o/r#2"]);
+    expect(sizes(gh.bodies)).toEqual([50, 25, 25]);
+    expect(gh.bodies.map((b) => b.variables.after)).toEqual([null, null, "c1"]);
+  });
+
+  test("a page still over the resource limits at the smallest size refuses without echoing the reply", async () => {
+    const gh = fakeGitHub(resourceLimits);
+    const err = await caught(busy(gh.fetch).pending());
+    expect(sizes(gh.bodies)).toEqual([50, 25, 12]);
+    expect(err.message).toBe(
+      "GitHub answered HTTP 200 with GraphQL errors (resource limits exceeded) while listing o/r's open issues",
+    );
+  });
+
+  test("a page that runs out of time is asked again at half the size", async () => {
+    const firsts: unknown[] = [];
+    const fetch = ((_: unknown, init?: RequestInit) => {
+      const { variables } = JSON.parse(init?.body as string) as Body;
+      firsts.push(variables.first);
+      if (variables.first === 50) {
+        return new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+        });
+      }
+      return Promise.resolve(page([issue(1)]));
+    }) as unknown as typeof globalThis.fetch;
+    const tracker = githubTracker({
+      owner: "o",
+      repo: "r",
+      token: "t",
+      fetch,
+      timeoutMs: 20,
+      retryDelayMs: 0,
+    });
+    expect((await tracker.pending()).map((t) => t.key)).toEqual(["o/r#1"]);
+    expect(firsts).toEqual([50, 25]);
+  });
+
+  test("a 502, 503 or 504 is retried at the same size before the page gives up", async () => {
+    const replies = [
+      () => new Response("<html>", { status: 502 }),
+      () => new Response("", { status: 503 }),
+      () => page([issue(1)]),
+    ];
+    const gh = fakeGitHub(() => (replies.shift() as () => Response)());
+    const tickets = await busy(gh.fetch).pending();
+    expect(tickets.map((t) => t.key)).toEqual(["o/r#1"]);
+    expect(sizes(gh.bodies)).toEqual([50, 50, 50]);
+  });
+
+  test("a gateway timeout that persists shrinks the page, then refuses naming the status", async () => {
+    const gh = fakeGitHub(() => new Response("<html>", { status: 504 }));
+    const err = await caught(busy(gh.fetch).pending());
+    expect(sizes(gh.bodies)).toEqual([50, 50, 50, 25, 25, 25, 12, 12, 12]);
+    expect(err.message).toBe("GitHub answered HTTP 504 while listing o/r's open issues");
+  });
+
+  test("a 503 that persists refuses without shrinking the page", async () => {
+    const gh = fakeGitHub(() => new Response("", { status: 503 }));
+    const err = await caught(busy(gh.fetch).pending());
+    expect(sizes(gh.bodies)).toEqual([50, 50, 50]);
+    expect(err.message).toBe("GitHub answered HTTP 503 while listing o/r's open issues");
+  });
+
+  test("an HTTP 200 without GraphQL data is retried like a gateway error", async () => {
+    const replies = [() => new Response("<html>bad gateway</html>"), () => page([issue(1)])];
+    const gh = fakeGitHub(() => (replies.shift() as () => Response)());
+    expect((await busy(gh.fetch).pending()).map((t) => t.key)).toEqual(["o/r#1"]);
+    expect(gh.bodies).toHaveLength(2);
+  });
+
+  test("retries wait longer each time", async () => {
+    const waits: number[] = [];
+    const realSetTimeout = globalThis.setTimeout;
+    const gh = fakeGitHub(() => new Response("", { status: 503 }));
+    globalThis.setTimeout = ((fn: () => void, ms?: number) => {
+      waits.push(ms ?? 0);
+      return realSetTimeout(fn, 0);
+    }) as typeof globalThis.setTimeout;
+    try {
+      await caught(githubTracker({ owner: "o", repo: "r", token: "t", fetch: gh.fetch }).pending());
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+    }
+    expect(waits.filter((ms) => ms >= 1000)).toEqual([1000, 2000]);
+  });
+});
+
+describe("githubTracker nested counts", () => {
+  const more = (endCursor: string) => ({ hasNextPage: true, endCursor });
+  const last = { hasNextPage: false, endCursor: null };
+  const crossRefs = (n: number) => Array.from({ length: n }, () => crossRef("issue"));
+
+  /** The page, then the rest of each nested connection, by issue id and cursor. */
+  function paged(node: Record<string, unknown>, rest: Record<string, Record<string, unknown>>) {
+    return fakeGitHub((body) => {
+      if (body.variables.id === undefined) {
+        return Response.json({ data: { repository: { issues: { pageInfo: last, nodes: [node] } } } });
+      }
+      const key = `${String(body.variables.id)}@${String(body.variables.after)}`;
+      return Response.json({ data: { node: rest[key] } });
+    });
+  }
+
+  test("linked issues past the first timeline page are read and counted", async () => {
+    const node = issue(8, {
+      subIssues: { totalCount: 0 },
+      timelineItems: { pageInfo: more("t1"), nodes: crossRefs(50) },
+    });
+    const gh = paged(node, {
+      "I_8@t1": { timelineItems: { pageInfo: more("t2"), nodes: crossRefs(100) } },
+      "I_8@t2": { timelineItems: { pageInfo: last, nodes: [...crossRefs(30), crossRef("pullrequest")] } },
+    });
+    const [t] = await githubTracker({ owner: "o", repo: "r", token: "t", fetch: gh.fetch }).pending();
+    expect(t?.linkedIssues).toBe(180);
+    expect(gh.bodies).toHaveLength(3);
+    const rest = gh.bodies[1]?.query.replace(/\s+/g, " ") ?? "";
+    expect(rest).toContain("node(id: $id) { ... on Issue { timelineItems(");
+    expect(rest).toContain("first: 100");
+    expect(rest).toContain("after: $after");
+  });
+
+  test("open closing pull requests and labels past their first page are read too", async () => {
+    const node = issue(9, {
+      labels: { pageInfo: more("l1"), nodes: [{ name: "a" }] },
+      closedByPullRequestsReferences: { pageInfo: more("p1"), nodes: [{ state: "OPEN" }] },
+    });
+    const gh = paged(node, {
+      "I_9@l1": { labels: { pageInfo: last, nodes: [{ name: "b" }] } },
+      "I_9@p1": {
+        closedByPullRequestsReferences: { pageInfo: last, nodes: [{ state: "OPEN" }, { state: "MERGED" }] },
+      },
+    });
+    const [t] = await githubTracker({ owner: "o", repo: "r", token: "t", fetch: gh.fetch }).pending();
+    expect(t).toMatchObject({ labels: ["a", "b"], openClosingPrs: 2 });
+  });
+
+  test("a named issue's nested connections are paged the same way", async () => {
+    const node = issue(4, {
+      subIssues: { totalCount: 0 },
+      timelineItems: { pageInfo: more("t1"), nodes: crossRefs(2) },
+    });
+    const gh = fakeGitHub((body) =>
+      body.variables.id === undefined
+        ? Response.json({ data: { repository: { issue: node } } })
+        : Response.json({ data: { node: { timelineItems: { pageInfo: last, nodes: crossRefs(3) } } } }),
+    );
+    const [t] = await githubTracker({ owner: "o", repo: "r", token: "t", fetch: gh.fetch }).issues(["o/r#4"]);
+    expect(t?.linkedIssues).toBe(5);
   });
 });
 
@@ -212,10 +436,42 @@ describe("githubTracker errors", () => {
     expect(err.message).toContain("export KIT_GH=$(gh auth token)");
   });
 
+  test.each([
+    ["HTTP 429", () => new Response("", { status: 429 })],
+    [
+      "HTTP 403 with retry-after",
+      () => Response.json({ message: "slow down" }, { status: 403, headers: { "retry-after": "60" } }),
+    ],
+    [
+      "HTTP 403 with no requests remaining",
+      () => Response.json({ message: "x" }, { status: 403, headers: { "x-ratelimit-remaining": "0" } }),
+    ],
+    [
+      "HTTP 403 naming a secondary rate limit",
+      () =>
+        Response.json({ message: "You have exceeded a secondary rate limit. secret-text" }, { status: 403 }),
+    ],
+    [
+      "a RATE_LIMITED GraphQL error",
+      () =>
+        Response.json({
+          data: null,
+          errors: [{ type: "RATE_LIMITED", message: "API rate limit exceeded secret-text" }],
+        }),
+    ],
+  ])("%s refuses as a rate limit, not a bad token", async (_, reply) => {
+    const gh = fakeGitHub(reply);
+    const err = await caught(
+      githubTracker({ owner: "o", repo: "r", token: "ghp_secret", fetch: gh.fetch }).pending(),
+    );
+    expect(err.message).toBe("GitHub rate-limited the request while listing o/r's open issues; retry later");
+  });
+
   test("other HTTP failures name the operation and status only", async () => {
-    const gh = fakeGitHub(() => Response.json({ message: "boom with secret detail" }, { status: 502 }));
+    const gh = fakeGitHub(() => Response.json({ message: "boom with secret detail" }, { status: 500 }));
     const err = await caught(githubTracker({ owner: "o", repo: "r", token: "t", fetch: gh.fetch }).pending());
-    expect(err.message).toBe("GitHub answered HTTP 502 while listing o/r's open issues");
+    expect(err.message).toBe("GitHub answered HTTP 500 while listing o/r's open issues");
+    expect(gh.bodies).toHaveLength(1);
   });
 
   test("GraphQL errors refuse without echoing the reply", async () => {
@@ -225,6 +481,20 @@ describe("githubTracker errors", () => {
     const err = await caught(githubTracker({ owner: "o", repo: "r", token: "t", fetch: gh.fetch }).pending());
     expect(err.message).toBe("GitHub answered HTTP 200 with GraphQL errors while listing o/r's open issues");
     expect(err.message).not.toContain("secret-text");
+  });
+
+  test("a request GitHub does not answer in time is aborted and refuses naming the operation", async () => {
+    let signal: AbortSignal | undefined;
+    const fetch = ((_: unknown, init?: RequestInit) => {
+      signal = init?.signal ?? undefined;
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+      });
+    }) as unknown as typeof globalThis.fetch;
+    const tracker = githubTracker({ owner: "o", repo: "r", token: "t", fetch, timeoutMs: 20 });
+    const err = await caught(tracker.issues(["o/r#1"]));
+    expect(signal?.aborted).toBe(true);
+    expect(err.message).toBe("GitHub did not answer within 20 ms while reading o/r#1");
   });
 
   test("an unreachable GitHub refuses naming the operation", async () => {

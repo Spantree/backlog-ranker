@@ -49,7 +49,7 @@ Ask impact and effort as two separate criteria. Never ask the model for a ratio,
 - `age`: a bucket (`under a week`, `under a month`, `under a quarter`, `under a year`, `a year or more`), not a day count, so cached answers do not expire daily
 - `reactions`: the issue's total reaction count
 - `linked_issues`: issues that cross-reference or are connected to it, plus its sub-issues (pull requests and the parent do not count)
-- `duplicates`: issues marked as duplicates of it
+- `duplicates`: issues marked as duplicates of it (on GitHub, issues closed or marked as a duplicate of this one by name; one closed as a duplicate without naming the original links to nothing and is not counted)
 
 Three more facts are counted for [fact gates](#fact-gates) only and are never sent to the model:
 
