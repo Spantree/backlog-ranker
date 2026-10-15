@@ -147,6 +147,42 @@ criteria:
     expect(again.ranking.ranked.map((r) => r.key)).toEqual(["acme/app#5", "acme/app#6"]);
   });
 
+  test("a re-weighted tie-break with the default pair question asks the engine nothing", async () => {
+    // No tiebreak_question: the pair question is built from the criteria,
+    // and must not depend on their weights, zero included. The overrides
+    // keep the top-two order, so the pair is the same state as before.
+    const rubric = parseRubric(
+      `name: sum
+compose: weighted_sum
+criteria:
+  - id: impact
+    direction: benefit
+    question: How much?
+    levels: [a, b, c, d, e]
+  - id: effort
+    direction: cost
+    question: How hard?
+    levels: [a, b, c, d, e]
+`,
+      "sum",
+    );
+    const pair = [ticket(5, "costly big"), ticket(6, "cheap small")];
+    const engine = stubEngine();
+    const cache = openCache(tmp(), engine.id, engine.model);
+    const base = { rubric, tickets: pair, engine, cache, now: () => NOW, tiebreak: 2 };
+    const first = await rankBacklog(base);
+    expect(first.tiebreak?.requests).toBe(1);
+    const asked = engine.calls;
+
+    for (const weights of [{ effort: 2 }, { impact: 0 }]) {
+      const again = await rankBacklog({ ...base, weights });
+      expect(again.ranking.ranked.map((r) => r.key)).toEqual(first.ranking.ranked.map((r) => r.key));
+      expect(again.stats.requests).toBe(0);
+      expect(again.tiebreak).toMatchObject({ requests: 0, cacheHits: 1 });
+    }
+    expect(engine.calls).toBe(asked);
+  });
+
   test("reads a tracker's pending tickets and flushes the cache for the next run", async () => {
     const root = tmp();
     const engine = stubEngine();
