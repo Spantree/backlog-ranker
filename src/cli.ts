@@ -545,6 +545,16 @@ function headerOf(err: object): string {
   return message === undefined ? name : `${name}: ${message}`;
 }
 
+/** A refusal's message alone: it is the remediation, and the class
+ * name would only bury it. The name stands in for an empty message. */
+function refusalHeaderOf(err: object): string {
+  return (
+    asNonEmptyString(safeRead(() => (err as Error).message)) ??
+    asNonEmptyString(safeRead(() => (err as Error).name)) ??
+    "Error"
+  );
+}
+
 /** The stack's FRAME lines only, from the first `at ...` line on. */
 function framesOf(err: object): string[] {
   const stack = safeRead(() => (err as Error).stack);
@@ -555,7 +565,8 @@ function framesOf(err: object): string[] {
 }
 
 /**
- * Render one error and its cause chain. Refusals print message-only,
+ * Render one error and its cause chain. Refusals print their message
+ * with no `Name: ` prefix and no frames,
  * PER CHAIN LINK: a refusal's message is the whole remediation story
  * and frames would point at the guard instead of the fix, while an
  * unexpected error keeps its frames even as the cause of a refusal. A
@@ -572,8 +583,9 @@ export function renderError(err: unknown, options: { debug: boolean }): string {
       lines.push(`${prefix}${String(current)}`);
       break;
     }
-    lines.push(`${prefix}${headerOf(current)}`);
-    if (isRefusal(current) && !options.debug) withheld = true;
+    const refusal = isRefusal(current);
+    lines.push(`${prefix}${refusal ? refusalHeaderOf(current) : headerOf(current)}`);
+    if (refusal && !options.debug) withheld = true;
     else lines.push(...framesOf(current));
     current = safeRead(() => (current as Error).cause);
   }

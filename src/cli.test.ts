@@ -47,7 +47,7 @@ describe("refusals", () => {
     const c = capture();
     expect(await run(["bogus"], c.io)).toBe(1);
     expect(c.out()).toBe("");
-    expect(c.err()).toStartWith("RefusalError: ");
+    expect(c.err()).toStartWith("unknown verb `bogus`");
     expect(c.err()).toContain("bogus");
     expect(c.err()).not.toMatch(/^\s+at /m);
     expect(c.err()).toContain("BACKLOG_DECISIONS_DEBUG");
@@ -56,7 +56,7 @@ describe("refusals", () => {
   test("a bad flag on a verb refuses naming the flag", async () => {
     const c = capture();
     expect(await run(["rank", "--bogus"], c.io)).toBe(1);
-    expect(c.err()).toStartWith("RefusalError: ");
+    expect(c.err()).toStartWith("Unknown option '--bogus'");
     expect(c.err()).toContain("--bogus");
     expect(c.err()).not.toMatch(/^\s+at /m);
   });
@@ -64,7 +64,7 @@ describe("refusals", () => {
   test("BACKLOG_DECISIONS_DEBUG restores the frames and drops the hint", async () => {
     const c = capture({ BACKLOG_DECISIONS_DEBUG: "1" });
     expect(await run(["bogus"], c.io)).toBe(1);
-    expect(c.err()).toStartWith("RefusalError: ");
+    expect(c.err()).toStartWith("unknown verb `bogus`");
     expect(c.err()).toMatch(/^\s+at /m);
     expect(c.err()).not.toContain("(BACKLOG_DECISIONS_DEBUG=1 for a stack)");
   });

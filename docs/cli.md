@@ -90,7 +90,7 @@ backlog-decisions explain -r impact-roi acme/app#42
 
 ## Errors and BACKLOG_DECISIONS_DEBUG
 
-A refusal (something you can fix: a usage error, a missing config, an unlisted source, an unset key, a failed request) prints its message first and no stack trace, followed by `(BACKLOG_DECISIONS_DEBUG=1 for a stack)`. Set `BACKLOG_DECISIONS_DEBUG` to any non-empty value to print the stack frames too. Unexpected errors always print their frames. Causes are printed after the error, each on a `caused by:` line.
+A refusal (something you can fix: a usage error, a missing config, an unlisted source, an unset key, a failed request) prints just its message (no error class name) and no stack trace, followed by `(BACKLOG_DECISIONS_DEBUG=1 for a stack)`. Set `BACKLOG_DECISIONS_DEBUG` to any non-empty value to print the stack frames too. Unexpected errors print `Name: message` and always their frames. Causes are printed after the error, each on a `caused by:` line.
 
 ## JSON output
 

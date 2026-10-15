@@ -170,7 +170,8 @@ describe("explain", () => {
     "a malformed key %s refuses with zero requests",
     async (key) => {
       expect(await explain("--rubric", "fixture", key)).toBe(1);
-      expect(stderr()).toMatch(/^\w*Error: /);
+      // A refusal prints its message first, with no class-name prefix.
+      expect(stderr()).toStartWith("an issue key looks like");
       expect(stderr()).toContain("<owner>/<repo>#<number>");
       expect(counts).toEqual({ github: 0, jev: 0, other: 0 });
     },

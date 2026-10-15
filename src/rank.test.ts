@@ -201,7 +201,7 @@ describe("rank", () => {
   ])("usage error %j refuses naming the problem, sending nothing", async (argv, message) => {
     expect(await rank(...argv)).toBe(1);
     // A refusal: message first, no stack frames.
-    expect(stderr()).toMatch(/^\w*Error: /);
+    expect(stderr()).not.toMatch(/^\w*Error: /);
     expect(stderr()).not.toMatch(/^\s+at /m);
     expect(stderr()).toContain(message);
     expect(counts).toEqual({ github: 0, jev: 0, other: 0 });

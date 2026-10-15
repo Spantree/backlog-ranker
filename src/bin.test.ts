@@ -50,7 +50,7 @@ describe("built bin under node", () => {
     const r = runBin(["rank", "--bogus"]);
     expect(r.code).toBe(1);
     expect(r.stdout).toBe("");
-    expect(r.stderr).toStartWith("RefusalError: Unknown option '--bogus'");
+    expect(r.stderr).toStartWith("Unknown option '--bogus'");
     expect(r.stderr).not.toMatch(/^\s+at /m);
     expect(r.stderr).toContain("BACKLOG_DECISIONS_DEBUG=1");
   });
@@ -90,7 +90,7 @@ describe("built bin under node: rank in a temp project", () => {
     const r = runBin(["rank", "-r", "fixture", "-s", "github:other/repo"], {}, join(project, "sub", "dir"));
     expect(r.code).toBe(1);
     expect(r.stdout).toBe("");
-    expect(r.stderr).toStartWith("SourceError: github:other/repo is not on the backlog source allowlist");
+    expect(r.stderr).toStartWith("github:other/repo is not on the backlog source allowlist");
     expect(r.stderr).toContain("No request was sent");
     expect(existsSync(join(project, ".backlog-decisions", "cache"))).toBe(false);
   });
