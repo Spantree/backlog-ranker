@@ -52,7 +52,7 @@ describe("calibrate", () => {
     expect(stderr()).toBe("");
     expect(counts).toEqual({ github: 6, jev: 6, other: 0 });
     const text = stdout();
-    expect(text).toContain("backlog-decisions calibrate: rubric fixture-roi");
+    expect(text).toContain("backlog-ranker calibrate: rubric fixture-roi");
     expect(text).toContain(`(sha ${FIXTURE_HASH})`);
     expect(text).toContain("6 tickets");
     expect(text).toContain("engine typesafe/jev-1.14 via openrouter");
@@ -71,7 +71,7 @@ describe("calibrate", () => {
     expect(report).toMatchObject({
       rubric: "fixture-roi",
       rubricHash: FIXTURE_HASH,
-      rubricPath: ".backlog-decisions/rubrics/fixture.yaml",
+      rubricPath: ".backlog-ranker/rubrics/fixture.yaml",
       engine: "typesafe",
       model: "jev-1.14",
       hand: SIX.split(","),

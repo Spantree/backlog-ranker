@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "backlog-decisions",
+      "name": "backlog-ranker",
       "dependencies": {
         "@octokit/graphql": "^9.0.5",
         "@typesafe-ai/sdk": "^0.7.0",

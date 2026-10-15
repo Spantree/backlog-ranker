@@ -1,10 +1,10 @@
 ---
-name: backlog-decisions
+name: backlog-ranker
 description: >-
   Rank a GitHub repository's open issues by criteria the user chooses:
   turn "rank by impact and ROI" or "rank by what unblocks the launch"
   into a rubric one question at a time, calibrate it against the user's
-  own hand ranking (Kendall's tau), then run `backlog-decisions rank`
+  own hand ranking (Kendall's tau), then run `backlog-ranker rank`
   and present the table. Use when the user asks to rank, prioritize,
   order or triage a backlog or a set of issues by value, impact, effort,
   ROI or any criterion of their own, or to build, tune, calibrate or
@@ -13,9 +13,9 @@ description: >-
 argument-hint: "[what to rank by, e.g. impact and ROI]"
 ---
 
-# Backlog decisions
+# Backlog ranker
 
-`backlog-decisions rank` asks a decision model (TypeSafe's Jev) narrow
+`backlog-ranker rank` asks a decision model (TypeSafe's Jev) narrow
 questions about one issue at a time, then weighs, divides and gates
 the answers in code. The rubric is the whole design: a vague level
 makes noise, a concrete one makes a ranking. This skill builds the
@@ -26,7 +26,7 @@ Issue keys look like `owner/repo#123`. A source is `github:owner/repo`.
 ## Before anything leaves the machine
 
 Issue titles, bodies and labels go to a third-party API. Every verb
-reads `.backlog-decisions/config.yaml` (or `config.local.yaml`, which
+reads `.backlog-ranker/config.yaml` (or `config.local.yaml`, which
 replaces it) and refuses any source not listed under `sources` before
 a request is sent. `backend` names the provider (`typesafe` or
 `openrouter`), `model` pins the Jev version, and `keys` names the
@@ -42,10 +42,10 @@ allowlist.
 ## Build the rubric: one question at a time
 
 Ask with the question tool, one decision per question, in grill-me
-style. Start from an existing rubric in `.backlog-decisions/rubrics/`
+style. Start from an existing rubric in `.backlog-ranker/rubrics/`
 when one fits, or from the shipped example `rubrics/impact-roi.yaml`
 in the package. A new rubric is saved as
-`.backlog-decisions/rubrics/<name>.local.yaml` (gitignored, an
+`.backlog-ranker/rubrics/<name>.local.yaml` (gitignored, an
 experiment); renaming it to `<name>.yaml` and committing it shares it
 as ranking policy. When both exist, the local file is read instead.
 
@@ -83,7 +83,7 @@ seeing the tool's order is not a calibration. Give them keys and
 titles in key order. Then:
 
 ```bash
-backlog-decisions calibrate --rubric <name> --source github:<owner>/<repo> --hand owner/repo#12,#7,31,...
+backlog-ranker calibrate --rubric <name> --source github:<owner>/<repo> --hand owner/repo#12,#7,31,...
 ```
 
 A rubric is trusted at Kendall's tau >= 0.4 on at least 12 issues;
@@ -95,7 +95,7 @@ re-asks only the questions whose wording changed.
 ## Run and present
 
 ```bash
-backlog-decisions rank --rubric <name> --source github:<owner>/<repo> [--weight impact=2] [--tiebreak 10] [--json]
+backlog-ranker rank --rubric <name> --source github:<owner>/<repo> [--weight impact=2] [--tiebreak 10] [--json]
 ```
 
 Every row shows each criterion's score (a probability-weighted level
@@ -111,7 +111,7 @@ orders.
 To show why one issue landed where it did:
 
 ```bash
-backlog-decisions explain --rubric <name> owner/repo#123
+backlog-ranker explain --rubric <name> owner/repo#123
 ```
 
 It prints each criterion's level probabilities and each gate's margin,

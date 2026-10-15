@@ -18,9 +18,9 @@ import { FIXTURE_DIR, type RequestCounts, replayFetch } from "./replay.js";
 /** {@link rubricHash} of the fixture rubric. */
 export const FIXTURE_HASH = rubricHash(readFileSync(join(FIXTURE_DIR, "rubric.yaml"), "utf8"));
 
-/** A temp project root with the fixture rubric at `.backlog-decisions/rubrics/fixture.yaml`. */
+/** A temp project root with the fixture rubric at `.backlog-ranker/rubrics/fixture.yaml`. */
 export function fixtureRoot(prefix: string): string {
-  const root = mkdtempSync(join(tmpdir(), `backlog-decisions-${prefix}-`));
+  const root = mkdtempSync(join(tmpdir(), `backlog-ranker-${prefix}-`));
   mkdirSync(join(root, RUBRIC_DIR), { recursive: true });
   copyFileSync(join(FIXTURE_DIR, "rubric.yaml"), join(root, RUBRIC_DIR, "fixture.yaml"));
   return root;
@@ -36,7 +36,7 @@ export function fixtureProject(root: string): { project: Project; counts: Reques
   const net = replayFetch();
   const project: Project = {
     projectRoot: root,
-    configPath: ".backlog-decisions/config.yaml",
+    configPath: ".backlog-ranker/config.yaml",
     config: { sources: ["github:kit/kit"], backend: "openrouter", keys: { ...DEFAULT_KEY_VARS } },
     sources: ["github:kit/kit"],
     allowlistKey: ALLOWLIST_KEY,

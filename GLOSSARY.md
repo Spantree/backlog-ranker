@@ -1,4 +1,4 @@
-# backlog-decisions
+# backlog-ranker
 
 Ranks a tracker's pending tickets by a rubric: a decision model answers narrow questions about one ticket at a time, and fixed rules turn the answers into an order.
 

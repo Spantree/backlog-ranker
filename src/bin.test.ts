@@ -24,7 +24,7 @@ function runBin(args: string[], env: Record<string, string> = {}, cwd = root) {
 }
 
 beforeAll(() => {
-  outDir = mkdtempSync(join(tmpdir(), "backlog-decisions-bin-"));
+  outDir = mkdtempSync(join(tmpdir(), "backlog-ranker-bin-"));
   const build = Bun.spawnSync(["bunx", "tsc", "-p", "tsconfig.build.json", "--outDir", outDir], {
     cwd: root,
   });
@@ -42,7 +42,7 @@ describe("built bin under node", () => {
   test("--help prints usage on stdout and exits 0", () => {
     const r = runBin(["--help"]);
     expect(r.code).toBe(0);
-    expect(r.stdout).toContain("backlog-decisions <verb>");
+    expect(r.stdout).toContain("backlog-ranker <verb>");
     expect(r.stderr).toBe("");
   });
 
@@ -52,11 +52,11 @@ describe("built bin under node", () => {
     expect(r.stdout).toBe("");
     expect(r.stderr).toStartWith("Unknown option '--bogus'");
     expect(r.stderr).not.toMatch(/^\s+at /m);
-    expect(r.stderr).toContain("BACKLOG_DECISIONS_DEBUG=1");
+    expect(r.stderr).toContain("BACKLOG_RANKER_DEBUG=1");
   });
 
-  test("BACKLOG_DECISIONS_DEBUG restores the frames", () => {
-    const r = runBin(["rank", "--bogus"], { BACKLOG_DECISIONS_DEBUG: "1" });
+  test("BACKLOG_RANKER_DEBUG restores the frames", () => {
+    const r = runBin(["rank", "--bogus"], { BACKLOG_RANKER_DEBUG: "1" });
     expect(r.code).toBe(1);
     expect(r.stderr).toMatch(/^\s+at /m);
   });
@@ -69,15 +69,15 @@ describe("built bin under node: rank in a temp project", () => {
   let project: string;
 
   beforeAll(() => {
-    project = mkdtempSync(join(tmpdir(), "backlog-decisions-project-"));
-    mkdirSync(join(project, ".backlog-decisions", "rubrics"), { recursive: true });
+    project = mkdtempSync(join(tmpdir(), "backlog-ranker-project-"));
+    mkdirSync(join(project, ".backlog-ranker", "rubrics"), { recursive: true });
     writeFileSync(
-      join(project, ".backlog-decisions", "config.yaml"),
+      join(project, ".backlog-ranker", "config.yaml"),
       "sources:\n  - github:kit/kit\nbackend: openrouter\n",
     );
     copyFileSync(
       join(root, "src", "fixtures", "rubric.yaml"),
-      join(project, ".backlog-decisions", "rubrics", "fixture.yaml"),
+      join(project, ".backlog-ranker", "rubrics", "fixture.yaml"),
     );
     mkdirSync(join(project, "sub", "dir"), { recursive: true });
   });
@@ -92,7 +92,7 @@ describe("built bin under node: rank in a temp project", () => {
     expect(r.stdout).toBe("");
     expect(r.stderr).toStartWith("github:other/repo is not on the backlog source allowlist");
     expect(r.stderr).toContain("No request was sent");
-    expect(existsSync(join(project, ".backlog-decisions", "cache"))).toBe(false);
+    expect(existsSync(join(project, ".backlog-ranker", "cache"))).toBe(false);
   });
 
   test("an allowed source with no token refuses naming the variable and the gh commands", () => {
@@ -100,12 +100,12 @@ describe("built bin under node: rank in a temp project", () => {
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("GITHUB_TOKEN is not set");
     expect(r.stderr).toContain("gh auth token");
-    expect(existsSync(join(project, ".backlog-decisions", "cache"))).toBe(false);
+    expect(existsSync(join(project, ".backlog-ranker", "cache"))).toBe(false);
   });
 
   test("rank --help answers without a project", () => {
     const r = runBin(["rank", "--help"], {}, tmpdir());
     expect(r.code).toBe(0);
-    expect(r.stdout).toContain("backlog-decisions rank");
+    expect(r.stdout).toContain("backlog-ranker rank");
   });
 });

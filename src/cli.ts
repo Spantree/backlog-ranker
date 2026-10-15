@@ -280,6 +280,6 @@ function renderFailure(err: unknown, io: CliIo): number {
     io.stdout(`${err.message}\n`);
     return 0;
   }
-  io.stderr(`${renderError(err, { debug: debugFromEnv(io.env.BACKLOG_DECISIONS_DEBUG) })}\n`);
+  io.stderr(`${renderError(err, { debug: debugFromEnv(io.env.BACKLOG_RANKER_DEBUG) })}\n`);
   return 1;
 }

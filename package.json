@@ -1,12 +1,12 @@
 {
-  "name": "backlog-decisions",
+  "name": "backlog-ranker",
   "version": "2026.10.15",
   "description": "Rank, calibrate and explain a backlog with a rubric and a decision model",
   "license": "MIT",
   "author": "Sebastian Otaegui",
   "type": "module",
   "bin": {
-    "backlog-decisions": "dist/bin.js"
+    "backlog-ranker": "dist/bin.js"
   },
   "exports": {
     ".": {

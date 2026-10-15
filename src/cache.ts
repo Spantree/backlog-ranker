@@ -1,6 +1,6 @@
 /**
  * The answer cache: machine-local JSON under the gitignored
- * `.backlog-decisions/cache/`, no database.
+ * `.backlog-ranker/cache/`, no database.
  *
  * One answer per entry, keyed by the content hash of the state as sent,
  * the hash of the question, the engine id and the pinned model id. So a
@@ -15,7 +15,7 @@ import { join } from "node:path";
 import type { DecisionAnswer, DecisionQuestion } from "./engine.js";
 import { canonicalJson, sha256 } from "./state.js";
 
-export const CACHE_DIR = join(".backlog-decisions", "cache");
+export const CACHE_DIR = join(".backlog-ranker", "cache");
 const SCHEMA = 2;
 
 interface Entry {

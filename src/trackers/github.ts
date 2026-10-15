@@ -211,7 +211,7 @@ export function githubTracker(opts: GitHubTrackerOptions): Tracker {
 export function plannedAdapter(source: Extract<SourceRef, { kind: "linear" }>): SourceError {
   return new SourceError(
     `${source.spec} is a Linear source, and the Linear adapter is planned but not built yet; ` +
-      "backlog-decisions reads github:<owner>/<repo> sources today",
+      "backlog-ranker reads github:<owner>/<repo> sources today",
   );
 }
 

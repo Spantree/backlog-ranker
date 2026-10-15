@@ -1,11 +1,11 @@
 # An example ranking policy: user impact over engineering effort, a
 # security pin, and a hold for tickets too thin to judge. Copy it to
-# .backlog-decisions/rubrics/impact-roi.yaml and reword the levels so each
+# .backlog-ranker/rubrics/impact-roi.yaml and reword the levels so each
 # one describes a situation your own tickets fall into.
 #
 # Calibrate before trusting it: hand-rank 12 to 15 tickets best first,
 # without looking at the tool's output, then run
-#   backlog-decisions calibrate --rubric impact-roi --source github:<owner>/<repo> --hand <keys>
+#   backlog-ranker calibrate --rubric impact-roi --source github:<owner>/<repo> --hand <keys>
 # A rubric is trusted at Kendall's tau >= 0.4 on 12 or more tickets. Below
 # that, reword the levels or gates behind the disagreeing pairs and re-run;
 # the cache re-asks only the questions whose wording changed. Experiment in

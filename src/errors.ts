@@ -10,9 +10,9 @@
 /**
  * The refusal brand: errors DESIGNED to stop the user with a loud,
  * actionable message. The CLI renders them message-first, with no
- * stack frames (`BACKLOG_DECISIONS_DEBUG` restores them).
+ * stack frames (`BACKLOG_RANKER_DEBUG` restores them).
  */
-export const REFUSAL_MARKER = Symbol.for("backlog-decisions.refusal");
+export const REFUSAL_MARKER = Symbol.for("backlog-ranker.refusal");
 
 /**
  * Base class for refusal-shaped errors. The message IS the remediation
@@ -50,7 +50,7 @@ export function isRefusal(err: unknown): boolean {
  * `process.exit` inside library code, so in-process callers keep their
  * `finally` blocks and help stays testable without a subprocess.
  */
-export const HELP_REQUEST_MARKER = Symbol.for("backlog-decisions.help-request");
+export const HELP_REQUEST_MARKER = Symbol.for("backlog-ranker.help-request");
 
 /** A request for help, not a failure: its message is the help text. */
 export class HelpRequest extends Error {
