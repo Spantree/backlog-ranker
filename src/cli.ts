@@ -7,14 +7,15 @@
  */
 
 import { type ParseArgsConfig, parseArgs } from "node:util";
-import { explainTicket, rankBacklog } from "./api.js";
+import { calibrateBacklog, explainTicket, rankBacklog } from "./api.js";
 import { openCache } from "./cache.js";
 import type { Ranking } from "./compose.js";
 import { HelpRequest, isHelpRequest, isRefusal, RefusalError } from "./errors.js";
+import { TRUST_MIN_TICKETS, TRUST_TAU } from "./kendall.js";
 import { loadProject, type Project } from "./loader.js";
 import { loadRubric } from "./rubric.js";
-import { assertAllowed, parseIssueKey, parseSource } from "./source.js";
-import { renderExplain, renderTable } from "./table.js";
+import { assertAllowed, parseIssueKey, parseSource, type SourceRef } from "./source.js";
+import { grid, renderExplain, renderTable } from "./table.js";
 import { MAX_TIEBREAK } from "./tiebreak.js";
 
 export interface CliIo {
@@ -23,7 +24,11 @@ export interface CliIo {
   env: Readonly<Record<string, string | undefined>>;
 }
 
-export type VerbHandler = (args: readonly string[], io: CliIo) => Promise<void> | void;
+/** A verb returns its exit code, or nothing for success. */
+export type VerbHandler = (
+  args: readonly string[],
+  io: CliIo,
+) => Promise<number | undefined> | number | undefined;
 
 export const VERBS = ["rank", "calibrate", "explain"] as const;
 export type Verb = (typeof VERBS)[number];
@@ -88,8 +93,7 @@ Exits 2 when the tool's ranking is not trusted.`,
   -h, --help              This text`,
 };
 
-/** Flags each verb accepts today. The stubs parse them so a bad flag is
- * refused and `--help` answered before "not implemented yet". */
+/** Flags each verb accepts; anything else is refused as a usage error. */
 const VERB_FLAGS: Record<Verb, ParseArgsConfig["options"]> = {
   rank: {
     rubric: { type: "string", short: "r" },
@@ -134,13 +138,6 @@ export function parseVerbArgs(verb: Verb, args: readonly string[]): ReturnType<t
   }
   if (parsed.values.help === true) throw new HelpRequest(VERB_USAGE[verb]);
   return parsed;
-}
-
-function notImplemented(verb: Verb): VerbHandler {
-  return (args) => {
-    parseVerbArgs(verb, args);
-    throw new RefusalError(`${verb} is not implemented yet`);
-  };
 }
 
 type Values = ReturnType<typeof parseArgs>["values"];
@@ -283,6 +280,121 @@ function rankVerb(deps: VerbDeps): VerbHandler {
   };
 }
 
+/** Exit codes for calibrate: CI fails a rubric edit that loses trust. */
+export const EXIT_NOT_TRUSTED = 2;
+
+const HAND_KEY_RE = /^(?:([\w.-]+)\/([\w.-]+))?#?(\d+)$/;
+
+/**
+ * `--hand`, best first: `owner/repo#N`, `#N` or `N`, each expanded to
+ * the source's repository so it matches the tracker's keys exactly.
+ * Refuses another repository's keys, duplicates and short lists before
+ * any request leaves the machine.
+ */
+export function parseHand(raw: string, source: SourceRef): string[] {
+  const items = raw
+    .split(",")
+    .map((k) => k.trim())
+    .filter((k) => k !== "");
+  if (source.kind !== "github") return items.map((k) => k.toUpperCase());
+  const repoName = `${source.owner}/${source.repo}`;
+  const keys: string[] = [];
+  const foreign: string[] = [];
+  for (const item of items) {
+    const m = HAND_KEY_RE.exec(item);
+    const named = m?.[1] === undefined ? undefined : `${m[1]}/${m[2]}`;
+    if (m?.[3] === undefined || (named !== undefined && named.toLowerCase() !== repoName.toLowerCase())) {
+      foreign.push(item);
+    } else {
+      keys.push(`${repoName}#${Number(m[3])}`);
+    }
+  }
+  if (foreign.length > 0) {
+    throw usageError(
+      "calibrate",
+      `--hand: ${foreign.join(", ")} not in ${repoName}, the repository this source reads ` +
+        `(keys look like ${repoName}#123, #123 or 123). No request was sent.`,
+    );
+  }
+  if (new Set(keys).size !== keys.length) throw usageError("calibrate", "--hand lists a key twice");
+  if (keys.length < 2) throw usageError("calibrate", "--hand needs at least two issue keys, best first");
+  return keys;
+}
+
+function calibrateVerb(deps: VerbDeps): VerbHandler {
+  return async (args, io) => {
+    const { values, positionals } = parseVerbArgs("calibrate", args);
+    noPositionals("calibrate", positionals);
+    const rubricName = requiredString("calibrate", values, "rubric");
+    const source = parseSource(requiredString("calibrate", values, "source"));
+    const hand = parseHand(requiredString("calibrate", values, "hand"), source);
+    const weights = weightOverrides("calibrate", values);
+    const project = await deps.resolve(deps.cwd(), io.env);
+    // The allowlist is checked before the rubric is read, the tracker is
+    // built, or anything leaves the machine.
+    assertAllowed(source, project.sources, project.allowlistKey);
+    const loaded = loadRubric(project.projectRoot, rubricName);
+    const tracker = project.tracker(source);
+    const engine = project.engine();
+    const cache = openCache(project.projectRoot, engine.id, engine.model, deps.now);
+    const result = await calibrateBacklog({
+      rubric: loaded.rubric,
+      tracker,
+      engine,
+      cache,
+      hand,
+      now: deps.now,
+      ...(weights === undefined ? {} : { weights }),
+    });
+    const { calibration, tool, stats } = result;
+    const code = calibration.trusted ? 0 : EXIT_NOT_TRUSTED;
+    if (values.json === true) {
+      const report = {
+        rubric: result.rubric.name,
+        rubricHash: loaded.hash,
+        rubricPath: loaded.path,
+        configPath: project.configPath,
+        source: source.spec,
+        engine: engine.id,
+        model: engine.model,
+        backend: project.backend,
+        hand,
+        tool,
+        stats,
+        ...calibration,
+      };
+      io.stdout(`${JSON.stringify(report, null, 2)}\n`);
+      return code;
+    }
+    const rows = new Map([...result.ranking.ranked, ...result.ranking.held].map((r) => [r.key, r]));
+    const lines = [
+      `backlog-decisions calibrate: rubric ${result.rubric.name} (${loaded.path}) (sha ${loaded.hash}), source ${source.spec}, ${calibration.n} tickets`,
+      // A tau holds for one model version only: name it beside the number.
+      `engine ${engine.id}/${engine.model} via ${project.backend} (config ${project.configPath})`,
+      "",
+      ...grid([
+        ["#", "hand", "tool", "tool composite", "title"],
+        ...hand.map((k, i) => {
+          const row = rows.get(tool[i] ?? "");
+          return [String(i + 1), k, row?.key ?? "-", row?.composite.toFixed(3) ?? "-", row?.title ?? ""];
+        }),
+      ]),
+      "",
+      `Kendall's tau ${calibration.tau.toFixed(3)} (${calibration.concordant} concordant, ${calibration.discordant} discordant pairs).`,
+      calibration.trusted
+        ? `TRUSTED: tau >= ${TRUST_TAU} on at least ${TRUST_MIN_TICKETS} tickets.`
+        : `NOT TRUSTED: needs tau >= ${TRUST_TAU} on at least ${TRUST_MIN_TICKETS} tickets (have ${calibration.tau.toFixed(3)} on ${calibration.n}).`,
+      `Engine: ${stats.tickets} tickets, ${stats.requests} requests; answers from cache ${stats.cachedAnswers}, asked ${stats.askedAnswers}.`,
+    ];
+    if (!calibration.trusted && calibration.disagreements.length > 0) {
+      lines.push("", "Pairs the rubric orders against the hand ranking (hand's choice first):");
+      for (const d of calibration.disagreements) lines.push(`  ${d.above} over ${d.below}`);
+    }
+    io.stdout(`${lines.join("\n")}\n`);
+    return code;
+  };
+}
+
 function explainVerb(deps: VerbDeps): VerbHandler {
   return async (args, io) => {
     const { values, positionals } = parseVerbArgs("explain", args);
@@ -321,7 +433,7 @@ function explainVerb(deps: VerbDeps): VerbHandler {
 function defaultVerbs(deps: VerbDeps): Record<Verb, VerbHandler> {
   return {
     rank: rankVerb(deps),
-    calibrate: notImplemented("calibrate"),
+    calibrate: calibrateVerb(deps),
     explain: explainVerb(deps),
   };
 }
@@ -334,7 +446,7 @@ function dispatch(
   argv: readonly string[],
   io: CliIo,
   verbs: Record<Verb, VerbHandler>,
-): Promise<void> | void {
+): ReturnType<VerbHandler> {
   const [first, ...rest] = argv;
   if (first === undefined || first === "--help" || first === "-h") throw new HelpRequest(USAGE);
   if (!isVerb(first)) {
@@ -351,8 +463,7 @@ export async function run(argv: readonly string[], io: CliIo, options: RunOption
   };
   const verbs = { ...defaultVerbs(deps), ...options.verbs };
   try {
-    await dispatch(argv, io, verbs);
-    return 0;
+    return (await dispatch(argv, io, verbs)) ?? 0;
   } catch (err) {
     return renderFailure(err, io);
   }

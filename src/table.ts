@@ -54,7 +54,8 @@ function flags(row: RankedRow): string {
   return out.length === 0 ? "-" : out.join(" ");
 }
 
-function grid(rows: string[][]): string[] {
+/** Left-aligned columns two spaces apart; the last column is not padded. */
+export function grid(rows: string[][]): string[] {
   const widths = (rows[0] ?? []).map((_, i) => Math.max(...rows.map((r) => (r[i] ?? "").length)));
   return rows.map((r) =>
     r
