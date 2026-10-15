@@ -51,12 +51,14 @@ export interface GitHubTrackerOptions {
 const NESTED = {
   labels: { args: "", first: 100, nodes: "nodes { name }" },
   timelineItems: {
-    args: "itemTypes: [CROSS_REFERENCED_EVENT, CONNECTED_EVENT, MARKED_AS_DUPLICATE_EVENT]",
+    args: "itemTypes: [CROSS_REFERENCED_EVENT, CONNECTED_EVENT, MARKED_AS_DUPLICATE_EVENT, UNMARKED_AS_DUPLICATE_EVENT]",
     first: 50,
     nodes: `nodes {
       __typename
       ... on CrossReferencedEvent { resourcePath }
       ... on ConnectedEvent { source { __typename ... on Node { id } } subject { __typename ... on Node { id } } }
+      ... on MarkedAsDuplicateEvent { canonical { ... on Node { id } } }
+      ... on UnmarkedAsDuplicateEvent { canonical { ... on Node { id } } }
     }`,
   },
   closedByPullRequestsReferences: { args: "includeClosedPrs: false", first: 10, nodes: "nodes { state }" },
@@ -110,6 +112,7 @@ interface Subject {
 interface TimelineNode {
   __typename: string;
   resourcePath?: string;
+  canonical?: { id?: string } | null;
   source?: Subject | null;
   subject?: Subject | null;
 }
@@ -284,6 +287,19 @@ function linksAnIssue(event: TimelineNode, self: string): boolean {
   return ends.length === 1 && ends[0]?.__typename === "Issue";
 }
 
+/** Issues marked as duplicates of this one. Closing an issue as a
+ * duplicate of a named original, or marking it so, puts an event naming
+ * the original canonical on the original's timeline; only events naming
+ * this issue canonical count, so this issue marked as a duplicate of
+ * another never does, and an unmarking takes one back. An issue closed as
+ * a duplicate without naming the original records no link anywhere, so it
+ * cannot be counted. */
+function duplicatesOf(events: TimelineNode[], self: string): number {
+  const net = (type: string) =>
+    events.filter((e) => e.__typename === type && e.canonical?.id === self).length;
+  return Math.max(0, net("MarkedAsDuplicateEvent") - net("UnmarkedAsDuplicateEvent"));
+}
+
 const openCount = (nodes: ({ state: string } | null)[]) => nodes.filter((n) => n?.state === "OPEN").length;
 
 function toTicket(owner: string, repo: string, node: IssueNode): Ticket {
@@ -302,7 +318,7 @@ function toTicket(owner: string, repo: string, node: IssueNode): Ticket {
     createdAt: node.createdAt,
     reactions: node.reactions.totalCount,
     linkedIssues: linked + node.subIssues.totalCount,
-    duplicates: events.filter((e) => e.__typename === "MarkedAsDuplicateEvent").length,
+    duplicates: duplicatesOf(events, node.id),
     openBlockers: node.issueDependenciesSummary.blockedBy,
     openClosingPrs: openCount(node.closedByPullRequestsReferences.nodes),
     assignees: node.assignees.totalCount,

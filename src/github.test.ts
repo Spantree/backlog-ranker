@@ -31,7 +31,7 @@ const issue = (n: number, extra: Record<string, unknown> = {}): Record<string, u
     nodes: [
       crossRef("issue"),
       { __typename: "ConnectedEvent", source: ref("Issue", `I_${n}`), subject: ref("Issue") },
-      { __typename: "MarkedAsDuplicateEvent" },
+      { __typename: "MarkedAsDuplicateEvent", canonical: { id: `I_${n}` } },
       crossRef("issue"),
     ],
   },
@@ -159,6 +159,43 @@ describe("githubTracker pending()", () => {
     );
     const [t] = await githubTracker({ owner: "o", repo: "r", token: "t", fetch: gh.fetch }).pending();
     expect(t).toMatchObject({ linkedIssues: 2, duplicates: 0 });
+  });
+
+  test("duplicates count issues marked as duplicates of this one, never this one marked as a duplicate", async () => {
+    const marked = (canonical: string) => ({
+      __typename: "MarkedAsDuplicateEvent",
+      canonical: { id: canonical },
+    });
+    const unmarked = (canonical: string) => ({
+      __typename: "UnmarkedAsDuplicateEvent",
+      canonical: { id: canonical },
+    });
+    const node = issue(7, {
+      timelineItems: {
+        nodes: [
+          marked("I_7"),
+          marked("I_7"),
+          marked("I_99"),
+          marked("I_7"),
+          unmarked("I_7"),
+          unmarked("I_99"),
+          { __typename: "MarkedAsDuplicateEvent", canonical: null },
+        ],
+      },
+    });
+    const gh = fakeGitHub(() =>
+      Response.json({
+        data: {
+          repository: { issues: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [node] } },
+        },
+      }),
+    );
+    const [t] = await githubTracker({ owner: "o", repo: "r", token: "t", fetch: gh.fetch }).pending();
+    // Three marked as duplicates of #7, one of them unmarked; #7 marked a duplicate of #99 does not count.
+    expect(t?.duplicates).toBe(2);
+    const query = gh.bodies[0]?.query.replace(/\s+/g, " ") ?? "";
+    expect(query).toContain("UNMARKED_AS_DUPLICATE_EVENT");
+    expect(query).toContain("... on MarkedAsDuplicateEvent { canonical { ... on Node { id } } }");
   });
 
   test("gate-only counts are zero when nothing blocks, closes or is assigned", async () => {
