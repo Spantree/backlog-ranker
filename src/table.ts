@@ -2,7 +2,7 @@
  * The ranked table. The engine returns no reasoning text, so the
  * per-criterion breakdown IS the explanation: every row shows each
  * criterion's score with its confidence, each gate's probability against
- * its threshold, and why a row is pinned, held or flagged.
+ * its threshold, and why a row is pinned, held, sunk or flagged.
  */
 
 import type { CalibrateResult, ExplainResult } from "./api.js";
@@ -45,13 +45,20 @@ function cell(rubric: Rubric, row: RankedRow, id: string): string {
   return a.choice;
 }
 
-function flags(row: RankedRow): string {
-  const out = [
-    ...row.pinnedBy.map((g) => `pinned:${g}`),
-    ...row.heldBy.map((g) => `held:${g}`),
-    ...row.lowConfidence.map((c) => `low-confidence:${c}`),
-    ...(row.truncated ? ["truncated"] : []),
+type FlagSource = Pick<RankedRow, "pinnedBy" | "heldBy" | "sunkBy" | "lowConfidence" | "truncated">;
+
+function flagList(f: FlagSource): string[] {
+  return [
+    ...f.pinnedBy.map((g) => `pinned:${g}`),
+    ...f.heldBy.map((g) => `held:${g}`),
+    ...f.sunkBy.map((g) => `sunk:${g}`),
+    ...f.lowConfidence.map((c) => `low-confidence:${c}`),
+    ...(f.truncated ? ["truncated"] : []),
   ];
+}
+
+function flags(row: RankedRow): string {
+  const out = flagList(row);
   return out.length === 0 ? "-" : out.join(" ");
 }
 
@@ -97,17 +104,18 @@ export function renderTable(opts: {
   if (ranking.held.length > 0) {
     lines.push(
       "",
-      `Held for a human (a flag_if_below gate answered under its threshold): ${ranking.held.length}`,
+      `Held for a human (a flag_if_below gate answered under its threshold, or a hold fact gate fired): ${ranking.held.length}`,
     );
     lines.push(...grid([head, ...ranking.held.map((row) => toRow(row, "-"))]));
   }
 
   const pinned = ranking.ranked.filter((r) => r.pinnedBy.length > 0).length;
+  const sunk = ranking.ranked.filter((r) => r.sunkBy.length > 0).length;
   const low = [...ranking.ranked, ...ranking.held].filter((r) => r.lowConfidence.length > 0).length;
   lines.push(
     "",
     `Scores are probability-weighted level indexes (0 = the first level) with their confidence; ? marks confidence under ${rubric.confidence_floor.toFixed(2)}. Gates show probability against threshold.`,
-    `Pinned: ${pinned}. Held: ${ranking.held.length}. Low-confidence rows: ${low}. Truncated bodies: ${
+    `Pinned: ${pinned}. Sunk: ${sunk}. Held: ${ranking.held.length}. Low-confidence rows: ${low}. Truncated bodies: ${
       stats.truncated.length === 0 ? "none" : stats.truncated.join(", ")
     }.`,
     `Engine: ${stats.tickets} tickets, ${stats.requests} requests; answers from cache ${stats.cachedAnswers}, asked ${stats.askedAnswers}.`,
@@ -122,8 +130,9 @@ export function renderTable(opts: {
   return lines.join("\n");
 }
 
-/** One ticket's reasoning: each criterion as a distribution over its
- * levels, each gate against its threshold, and the flags they raise. */
+/** One ticket's reasoning: its facts, each criterion as a distribution
+ * over its levels, each gate against its threshold, each fact gate
+ * against its at_least, and the flags they raise. */
 export function renderExplain(opts: { header: RunHeader; result: ExplainResult }): string {
   const { header, result } = opts;
   const { rubric } = result;
@@ -135,6 +144,9 @@ export function renderExplain(opts: { header: RunHeader; result: ExplainResult }
     `${result.key}  ${result.title}`,
     result.url,
     `composite ${result.composite.toFixed(3)}`,
+    `facts: ${Object.entries(result.facts)
+      .map(([name, value]) => `${name} ${value}`)
+      .join(", ")}`,
   ];
   for (const c of result.criteria) {
     lines.push(
@@ -153,16 +165,22 @@ export function renderExplain(opts: { header: RunHeader; result: ExplainResult }
       `gate ${g.id} (${g.action}): ${g.probability.toFixed(2)} ${sign} ${g.threshold.toFixed(2)}: ${outcome}`,
     );
   }
-  const f = result.flags;
-  const flagList = [
-    ...f.pinnedBy.map((g) => `pinned:${g}`),
-    ...f.heldBy.map((g) => `held:${g}`),
-    ...f.lowConfidence.map((c) => `low-confidence:${c}`),
-    ...(f.truncated ? ["truncated"] : []),
-  ];
+  for (const g of result.factGates) {
+    const sign = g.fired ? "≥" : "<";
+    const outcome =
+      g.outcome === "held"
+        ? "held"
+        : g.outcome === "sunk"
+          ? "sunk"
+          : g.fired
+            ? "no effect (pinned)"
+            : "no effect";
+    lines.push(`fact gate ${g.id} (${g.fact}, ${g.action}): ${g.value} ${sign} ${g.atLeast}: ${outcome}`);
+  }
+  const shown = flagList(result.flags);
   lines.push(
     "",
-    `Flags: ${flagList.length === 0 ? "none" : flagList.join(" ")}.`,
+    `Flags: ${shown.length === 0 ? "none" : shown.join(" ")}.`,
     `Body ${result.flags.truncated ? "truncated to fit the prompt cap" : "sent whole"}.`,
     `Engine: ${result.stats.requests} requests; answers from cache ${result.stats.cachedAnswers}, asked ${result.stats.askedAnswers}.`,
   );

@@ -5,99 +5,15 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { calibrateBacklog, explainTicket, rankBacklog } from "./api.js";
 import { type AnswerCache, openCache } from "./cache.js";
-import type { DecisionAnswer, DecisionEngine } from "./engine.js";
+import type { DecisionEngine } from "./engine.js";
+import { FACT_GATE_FIXTURE, NOW, rubricWith, stubEngine, ticket } from "./fixtures/fact-gates.js";
 import { parseRubric, type Rubric } from "./rubric.js";
 import type { Ticket } from "./ticket.js";
-
-const NOW = new Date("2026-10-15T00:00:00Z");
-const FIXTURE = readFileSync(join(import.meta.dirname, "fixtures", "rubric.yaml"), "utf8");
-
-/** The two gates the brief agreed, as the shipped rubric declares them. */
-const BRIEF_GATES = `fact_gates:
-  - id: blocked
-    fact: open_blockers
-    at_least: 1
-    action: sink
-  - id: in_progress
-    fact: open_closing_prs
-    at_least: 1
-    action: hold
-`;
-
-/** The fixture rubric (security pin, judgeable hold) plus `factGates`. */
-export const rubricWith = (factGates = BRIEF_GATES): Rubric =>
-  parseRubric(`${FIXTURE}${factGates}`, "fact-gates.yaml");
-
-/** What the stub engine answers about each ticket, keyed by title.
- * Composites under the fixture's roi rubric: (1 + impact) / (1 + effort). */
-const TRUTH: Record<string, { impact: number; effort: number; security?: number; judgeable?: number }> = {
-  "big win": { impact: 4, effort: 0 }, // 5
-  "cheap small": { impact: 1, effort: 0 }, // 2
-  middling: { impact: 2, effort: 2 }, // 1
-  "token in a log": { impact: 1, effort: 3, security: 0.9 }, // 0.5, pinned
-  "vague leak": { impact: 2, effort: 0, security: 0.9, judgeable: 0.2 }, // 3, pinned and model-held
-  "something vague": { impact: 4, effort: 0, judgeable: 0.2 }, // 5, model-held
-};
-
-/** Tie-break preference: the stub always picks the ticket listed later
- * here, so a pair across groups would lift a sunk row or drop a pin. */
-const PREFERENCE = ["token in a log", "vague leak", "cheap small", "middling", "big win"];
-
-export function stubEngine(): DecisionEngine & { calls: number; states: unknown[] } {
-  const engine = {
-    id: "stub",
-    model: "stub-1",
-    calls: 0,
-    states: [] as unknown[],
-    async decide(state: unknown, questions: Parameters<DecisionEngine["decide"]>[1]) {
-      engine.calls++;
-      engine.states.push(state);
-      const answers: Record<string, DecisionAnswer> = {};
-      for (const [id, q] of Object.entries(questions)) {
-        if (q.kind === "choice") {
-          const pair = state as { first: { title: string }; second: { title: string } };
-          const firstWins = PREFERENCE.indexOf(pair.first.title) > PREFERENCE.indexOf(pair.second.title);
-          answers[id] = {
-            kind: "choice",
-            choice: firstWins ? "first" : "second",
-            probabilities: firstWins ? { first: 0.9, second: 0.1 } : { first: 0.1, second: 0.9 },
-            confidence: 0.9,
-          };
-          continue;
-        }
-        const truth = TRUTH[(state as { title: string }).title];
-        if (truth === undefined) throw new Error("stub engine asked about an unknown ticket");
-        if (q.kind === "score") {
-          const value = id === "impact" ? truth.impact : truth.effort;
-          answers[id] = { kind: "score", value, probabilities: [], confidence: 0.9 };
-        } else {
-          const p = id === "security" ? (truth.security ?? 0.1) : (truth.judgeable ?? 0.9);
-          answers[id] = { kind: "noul", probability: p };
-        }
-      }
-      return { servedModel: "stub-1-20261015", answers };
-    },
-  };
-  return engine;
-}
-
-export const ticket = (n: number, title: string, facts: Partial<Ticket> = {}): Ticket => ({
-  key: `acme/app#${n}`,
-  title,
-  body: `about ${title}`,
-  labels: [],
-  url: `https://github.com/acme/app/issues/${n}`,
-  createdAt: "2026-10-01T00:00:00Z",
-  reactions: 0,
-  linkedIssues: 0,
-  duplicates: 0,
-  ...facts,
-});
 
 const cacheFor = (engine: DecisionEngine): AnswerCache =>
   openCache(mkdtempSync(join(tmpdir(), "backlog-fact-gates-")), engine.id, engine.model);
@@ -125,7 +41,7 @@ describe("fact gates in rankBacklog", () => {
       ticket(3, "cheap small"),
       ticket(4, "token in a log"),
     ]);
-    expect(keys(ranking.ranked)).toEqual(["acme/app#4", "acme/app#3", "acme/app#2", "acme/app#1"]);
+    expect(keys(ranking.ranked)).toEqual(["kit/kit#4", "kit/kit#3", "kit/kit#2", "kit/kit#1"]);
     expect(ranking.ranked.map((r) => r.sunkBy)).toEqual([[], [], [], ["blocked"]]);
     expect(ranking.held).toEqual([]);
   });
@@ -136,13 +52,13 @@ describe("fact gates in rankBacklog", () => {
       ticket(2, "big win", { openBlockers: 1 }),
       ticket(3, "cheap small"),
     ]);
-    expect(keys(ranking.ranked)).toEqual(["acme/app#3", "acme/app#2", "acme/app#1"]);
+    expect(keys(ranking.ranked)).toEqual(["kit/kit#3", "kit/kit#2", "kit/kit#1"]);
   });
 
   test("a ticket with an open closing pull request is held, flagged by its gate", async () => {
     const { ranking } = await rankOf([ticket(1, "big win", { openClosingPrs: 1 }), ticket(2, "middling")]);
-    expect(keys(ranking.ranked)).toEqual(["acme/app#2"]);
-    expect(ranking.held.map((r) => [r.key, r.heldBy])).toEqual([["acme/app#1", ["in_progress"]]]);
+    expect(keys(ranking.ranked)).toEqual(["kit/kit#2"]);
+    expect(ranking.held.map((r) => [r.key, r.heldBy])).toEqual([["kit/kit#1", ["in_progress"]]]);
   });
 
   test("a fact-gate hold wins over a pin", async () => {
@@ -150,9 +66,9 @@ describe("fact gates in rankBacklog", () => {
       ticket(1, "token in a log", { openClosingPrs: 1 }),
       ticket(2, "middling"),
     ]);
-    expect(keys(ranking.ranked)).toEqual(["acme/app#2"]);
+    expect(keys(ranking.ranked)).toEqual(["kit/kit#2"]);
     expect(ranking.held.map((r) => [r.key, r.pinnedBy, r.heldBy])).toEqual([
-      ["acme/app#1", ["security"], ["in_progress"]],
+      ["kit/kit#1", ["security"], ["in_progress"]],
     ]);
   });
 
@@ -161,13 +77,13 @@ describe("fact gates in rankBacklog", () => {
       ticket(1, "big win"),
       ticket(2, "token in a log", { openBlockers: 1 }),
     ]);
-    expect(keys(ranking.ranked)).toEqual(["acme/app#2", "acme/app#1"]);
+    expect(keys(ranking.ranked)).toEqual(["kit/kit#2", "kit/kit#1"]);
     expect(ranking.ranked[0]).toMatchObject({ pinnedBy: ["security"], sunkBy: [] });
   });
 
   test("a pin still wins over a model-gate hold", async () => {
     const { ranking } = await rankOf([ticket(1, "big win"), ticket(2, "vague leak")]);
-    expect(keys(ranking.ranked)).toEqual(["acme/app#2", "acme/app#1"]);
+    expect(keys(ranking.ranked)).toEqual(["kit/kit#2", "kit/kit#1"]);
     expect(ranking.ranked[0]).toMatchObject({ pinnedBy: ["security"], heldBy: ["judgeable"] });
   });
 
@@ -176,8 +92,8 @@ describe("fact gates in rankBacklog", () => {
       ticket(1, "something vague", { openBlockers: 1 }),
       ticket(2, "middling"),
     ]);
-    expect(keys(ranking.ranked)).toEqual(["acme/app#2"]);
-    expect(keys(ranking.held)).toEqual(["acme/app#1"]);
+    expect(keys(ranking.ranked)).toEqual(["kit/kit#2"]);
+    expect(keys(ranking.held)).toEqual(["kit/kit#1"]);
   });
 
   test("a gate on assignees holds an assigned ticket; without it the same ticket ranks as before", async () => {
@@ -186,10 +102,10 @@ describe("fact gates in rankBacklog", () => {
       "fact_gates:\n  - id: assigned\n    fact: assignees\n    at_least: 1\n    action: hold\n",
     );
     const gated = await rankOf(tickets, assigned);
-    expect(keys(gated.ranking.ranked)).toEqual(["acme/app#2"]);
-    expect(gated.ranking.held.map((r) => [r.key, r.heldBy])).toEqual([["acme/app#1", ["assigned"]]]);
-    const plain = await rankOf(tickets, parseRubric(FIXTURE, "fixture"));
-    expect(keys(plain.ranking.ranked)).toEqual(["acme/app#1", "acme/app#2"]);
+    expect(keys(gated.ranking.ranked)).toEqual(["kit/kit#2"]);
+    expect(gated.ranking.held.map((r) => [r.key, r.heldBy])).toEqual([["kit/kit#1", ["assigned"]]]);
+    const plain = await rankOf(tickets, parseRubric(FACT_GATE_FIXTURE, "fixture"));
+    expect(keys(plain.ranking.ranked)).toEqual(["kit/kit#1", "kit/kit#2"]);
     expect(plain.ranking.held).toEqual([]);
   });
 
@@ -202,8 +118,8 @@ describe("fact gates in rankBacklog", () => {
       twice,
     );
     expect(ranking.ranked.map((r) => [r.key, r.sunkBy])).toEqual([
-      ["acme/app#1", []],
-      ["acme/app#2", ["popular"]],
+      ["kit/kit#1", []],
+      ["kit/kit#2", ["popular"]],
     ]);
   });
 
@@ -215,7 +131,7 @@ describe("fact gates in rankBacklog", () => {
       ticket(2, "middling"),
     ];
     const run = (rubric: Rubric) => rankBacklog({ rubric, tickets, engine, cache, now: () => NOW });
-    await run(parseRubric(FIXTURE, "fixture"));
+    await run(parseRubric(FACT_GATE_FIXTURE, "fixture"));
     const asked = engine.calls;
     expect(asked).toBe(2);
     const sunk = await run(
@@ -227,8 +143,8 @@ describe("fact gates in rankBacklog", () => {
     expect(engine.calls).toBe(asked);
     expect(sunk.stats.requests).toBe(0);
     expect(held.stats.requests).toBe(0);
-    expect(keys(sunk.ranking.ranked)).toEqual(["acme/app#2", "acme/app#1"]);
-    expect(keys(held.ranking.held)).toEqual(["acme/app#1"]);
+    expect(keys(sunk.ranking.ranked)).toEqual(["kit/kit#2", "kit/kit#1"]);
+    expect(keys(held.ranking.held)).toEqual(["kit/kit#1"]);
   });
 
   test("the state sent to the model carries none of the three fact-gate-only facts", async () => {
@@ -239,7 +155,7 @@ describe("fact gates in rankBacklog", () => {
     const sent = engine.states[0] as { facts: Record<string, unknown> };
     expect(Object.keys(sent.facts).sort()).toEqual(["age", "duplicates", "linked_issues", "reactions"]);
     expect(JSON.stringify(engine.states)).not.toMatch(/blocker|closing|assignee/i);
-    expect(states.get("acme/app#1")).toEqual(sent as never);
+    expect(states.get("kit/kit#1")).toEqual(sent as never);
   });
 });
 
@@ -262,13 +178,7 @@ describe("fact gates with the tie-break and calibration", () => {
     // Pinned: #5 over #4, by composite and by the stub alike. Normal: the
     // stub lifts "middling" (#2) over the higher-composite #3. Sunk: #1
     // stays last although the stub prefers it to every other row.
-    expect(keys(ranking.ranked)).toEqual([
-      "acme/app#5",
-      "acme/app#4",
-      "acme/app#2",
-      "acme/app#3",
-      "acme/app#1",
-    ]);
+    expect(keys(ranking.ranked)).toEqual(["kit/kit#5", "kit/kit#4", "kit/kit#2", "kit/kit#3", "kit/kit#1"]);
     // One pair per two-row group, none across groups.
     expect(tiebreak?.pairs).toBe(2);
   });
@@ -289,7 +199,7 @@ describe("fact gates with the tie-break and calibration", () => {
       cache: cacheFor(engine),
       now: () => NOW,
     });
-    expect(result.tool).toEqual(["acme/app#4", "acme/app#2", "acme/app#1", "acme/app#3"]);
+    expect(result.tool).toEqual(["kit/kit#4", "kit/kit#2", "kit/kit#1", "kit/kit#3"]);
   });
 });
 
