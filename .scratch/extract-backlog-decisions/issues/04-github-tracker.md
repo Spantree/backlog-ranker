@@ -4,10 +4,10 @@
 
 **Blocked by:** 01 (package skeleton)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Source parser and allowlist check ported; `github:owner/repo` served, `linear:TEAM` parses and refuses naming it a planned adapter
-- [ ] Tracker over octokit's GraphQL client with an injectable fetch for tests; one paginated query for pending issues, one lookup per key
-- [ ] Errors are value-free: operation and HTTP status only; auth failures name the token variable and the gh commands that mint one
-- [ ] Fixture: the evie-kit Linear fixture page reshaped into a GitHub GraphQL response carrying exactly the same titles, bodies, labels, createdAt and fact counts (so the recorded Jev answers hash-match in ticket 05); keys become `kit/kit#N`
-- [ ] Tests over a fake fetch: pagination, PR exclusion, facts mapping, key format, wrong-repo refusal, value-free errors
+- [x] Source parser and allowlist check ported; `github:owner/repo` served, `linear:TEAM` parses and refuses naming it a planned adapter
+- [x] Tracker over octokit's GraphQL client with an injectable fetch for tests; one paginated query for pending issues, one lookup per key
+- [x] Errors are value-free: operation and HTTP status only; auth failures name the token variable and the gh commands that mint one
+- [x] Fixture: the evie-kit Linear fixture page reshaped into a GitHub GraphQL response carrying exactly the same titles, bodies, labels, createdAt and fact counts (so the recorded Jev answers hash-match in ticket 05); keys become `kit/kit#N`
+- [x] Tests over a fake fetch: pagination, PR exclusion, facts mapping, key format, wrong-repo refusal, value-free errors

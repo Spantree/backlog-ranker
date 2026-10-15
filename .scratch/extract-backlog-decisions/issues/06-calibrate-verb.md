@@ -4,9 +4,9 @@
 
 **Blocked by:** 05 (rank end to end)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Hand list parsing accepts keys with or without the `#`, normalises case, refuses duplicates and lists shorter than two
-- [ ] Held rows rank after kept rows in the tool order
-- [ ] Exit code 2 on NOT TRUSTED, 0 on TRUSTED, 1 on refusal
-- [ ] Tests over the fixture network: tau report names engine and model, six tickets is NOT TRUSTED and exits 2, `--json` shape, refusals for duplicate and short lists and wrong-repo keys
+- [x] Hand list parsing accepts keys with or without the `#`, normalises case, refuses duplicates and lists shorter than two
+- [x] Held rows rank after kept rows in the tool order
+- [x] Exit code 2 on NOT TRUSTED, 0 on TRUSTED, 1 on refusal
+- [x] Tests over the fixture network: tau report names engine and model, six tickets is NOT TRUSTED and exits 2, `--json` shape, refusals for duplicate and short lists and wrong-repo keys

@@ -4,12 +4,12 @@
 
 **Blocked by:** 01 (package skeleton)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Rubric schema and parser ported, YAML read with the `yaml` package, a short content hash of the rubric text available on load, local file replaces committed file outright, weight overrides validated
-- [ ] State building and hashing ported: title, sorted labels, body, facts; 30,000-byte prompt budget; body clipping on character boundaries with the truncation note naming `backlog-decisions`; canonical JSON; SHA-256
-- [ ] Cache ported: one file per engine and model, keyed by state hash and question hash, merge on flush, schema tag, model isolation
-- [ ] Composition (weighted_sum and roi), scoring pool with concurrency bound and fail-fast settle, tie-break in both orders within pinned and unpinned groups, Kendall's tau ported
-- [ ] Rank facade and calibrate facade exported from the package root, taking rubric object or path, engine, tracker or ticket list, cache, clock, optional weights, tie-break depth, concurrency
-- [ ] Unit suites ported and green: rubric, state, cache, compose, score, tiebreak, kendall
-- [ ] Facade test: hand-built tickets through a stub engine rank as expected; a re-weighted call records zero engine calls
+- [x] Rubric schema and parser ported, YAML read with the `yaml` package, a short content hash of the rubric text available on load, local file replaces committed file outright, weight overrides validated
+- [x] State building and hashing ported: title, sorted labels, body, facts; 30,000-byte prompt budget; body clipping on character boundaries with the truncation note naming `backlog-decisions`; canonical JSON; SHA-256
+- [x] Cache ported: one file per engine and model, keyed by state hash and question hash, merge on flush, schema tag, model isolation
+- [x] Composition (weighted_sum and roi), scoring pool with concurrency bound and fail-fast settle, tie-break in both orders within pinned and unpinned groups, Kendall's tau ported
+- [x] Rank facade and calibrate facade exported from the package root, taking rubric object or path, engine, tracker or ticket list, cache, clock, optional weights, tie-break depth, concurrency
+- [x] Unit suites ported and green: rubric, state, cache, compose, score, tiebreak, kendall
+- [x] Facade test: hand-built tickets through a stub engine rank as expected; a re-weighted call records zero engine calls

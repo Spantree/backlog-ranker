@@ -1,6 +1,6 @@
 # Spec: extract the backlog ranker from evie-kit as `backlog-decisions`
 
-Status: ready-for-agent
+Status: resolved
 Type: enhancement
 Created: 2026-10-15
 
@@ -189,3 +189,5 @@ No test calls a live endpoint. Bun's test runner, temp directories for every fil
 - Source material: `../evie-kit/packages/backlog`, `../evie-kit/packages/typesafe`, `../evie-kit/packages/core/src/utils/errors.ts`, `../evie-kit/packages/cli/src/backlog.ts`, `../evie-kit/skills/backlog/SKILL.md`, `../evie-kit/.evie-kit/backlog/impact-roi.yaml`.
 
 ## Comments
+
+- 2026-10-15, implementation: tickets 01 to 09 merged on branch `extract-backlog-decisions`, then a two-axis code review (standards and spec) and one fix pass covering all 15 findings. Final gates: typecheck, lint with 0 warnings, 194 tests, build, `npm pack` of 122 files with no tests or fixtures, and the built bin checked under Node 22.23.3. Decisions made during review: `--backend` is refused when a config file exists; the loader's tracker also enforces the allowlist; every verb accepts a rubric path; `explain` makes one GitHub lookup and reads decision-model answers from the cache; refusals print their message only.

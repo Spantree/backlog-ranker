@@ -4,9 +4,9 @@
 
 **Blocked by:** 05 (rank end to end)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Verb accepts one positional key; refuses a key that does not parse or whose repository is not on the allowlist
-- [ ] Output lists levels with their probabilities so the score is readable as a distribution
-- [ ] Explain facade exported from the package root
-- [ ] Tests over the fixture network: after rank, explain sends zero requests; cold, one request; `--json` shape; unlisted repository refuses with zero requests
+- [x] Verb accepts one positional key; refuses a key that does not parse or whose repository is not on the allowlist
+- [x] Output lists levels with their probabilities so the score is readable as a distribution
+- [x] Explain facade exported from the package root
+- [x] Tests over the fixture network: after rank, explain sends zero requests; cold, one request; `--json` shape; unlisted repository refuses with zero requests

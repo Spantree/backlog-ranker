@@ -4,13 +4,13 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `package.json` named `backlog-decisions`, bin of the same name, version 2026.10.15, MIT, `engines.node >= 22`, ESM, `exports` and `bin` pointing at the compiled output, runtime deps `@typesafe-ai/sdk`, `@octokit/graphql`, `yaml`, `zod`
-- [ ] tsc emits ESM plus declarations into `dist/`; `bun run build`, `bun run typecheck`, `bun run lint` (biome), `bun run test` scripts exist and pass
-- [ ] `.mise.toml` pins Bun 1.4.3 and Node 22.23.3; `.gitignore` covers `dist/`, `node_modules/`, `.backlog-decisions/cache/`, `.backlog-decisions/**/*.local.yaml`
-- [ ] Errors module: refusal brand and help-request brand as registry symbols, with property-based guards, exported
-- [ ] Engine-neutral decision interface (score, choice, noul questions; typed answers; decide per state), tracker interface and ticket shape exported, ported from evie-kit unchanged in meaning
-- [ ] Bin dispatches `rank`, `calibrate`, `explain` (stubs that refuse "not implemented yet" are fine) and renders help and refusals per the spec's CLI section
-- [ ] Tests: help is a help request on stdout with exit 0; a refusal is message-first on stderr with exit 1; debug variable restores frames; the built bin runs under `node dist/bin.js --help`
-- [ ] LICENSE (MIT, Sebastian Otaegui)
+- [x] `package.json` named `backlog-decisions`, bin of the same name, version 2026.10.15, MIT, `engines.node >= 22`, ESM, `exports` and `bin` pointing at the compiled output, runtime deps `@typesafe-ai/sdk`, `@octokit/graphql`, `yaml`, `zod`
+- [x] tsc emits ESM plus declarations into `dist/`; `bun run build`, `bun run typecheck`, `bun run lint` (biome), `bun run test` scripts exist and pass
+- [x] `.mise.toml` pins Bun 1.4.3 and Node 22.23.3; `.gitignore` covers `dist/`, `node_modules/`, `.backlog-decisions/cache/`, `.backlog-decisions/**/*.local.yaml`
+- [x] Errors module: refusal brand and help-request brand as registry symbols, with property-based guards, exported
+- [x] Engine-neutral decision interface (score, choice, noul questions; typed answers; decide per state), tracker interface and ticket shape exported, ported from evie-kit unchanged in meaning
+- [x] Bin dispatches `rank`, `calibrate`, `explain` (stubs that refuse "not implemented yet" are fine) and renders help and refusals per the spec's CLI section
+- [x] Tests: help is a help request on stdout with exit 0; a refusal is message-first on stderr with exit 1; debug variable restores frames; the built bin runs under `node dist/bin.js --help`
+- [x] LICENSE (MIT, Sebastian Otaegui)

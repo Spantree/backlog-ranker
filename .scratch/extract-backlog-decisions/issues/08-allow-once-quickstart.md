@@ -4,9 +4,9 @@
 
 **Blocked by:** 05 (rank end to end)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `--allow-once` admits exactly the `--source` given, for this process only; the notice names source and backend
-- [ ] `--backend` accepted only with `--allow-once`; required when no config file resolves; refused values name the two backends
-- [ ] With no config file, the cache still lands under `.backlog-decisions/cache/` beneath the project root (or cwd when no root marker exists)
-- [ ] Tests: no-config run succeeds with the notice and sends requests; the config directory holds only the cache afterwards; `--allow-once` with a config file admits the source without editing the file; `--backend` without `--allow-once` refuses
+- [x] `--allow-once` admits exactly the `--source` given, for this process only; the notice names source and backend
+- [x] `--backend` accepted only with `--allow-once`; required when no config file resolves; refused values name the two backends
+- [x] With no config file, the cache still lands under `.backlog-decisions/cache/` beneath the project root (or cwd when no root marker exists)
+- [x] Tests: no-config run succeeds with the notice and sends requests; the config directory holds only the cache afterwards; `--allow-once` with a config file admits the source without editing the file; `--backend` without `--allow-once` refuses
