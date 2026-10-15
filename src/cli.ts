@@ -7,14 +7,14 @@
  */
 
 import { type ParseArgsConfig, parseArgs } from "node:util";
-import { rankBacklog } from "./api.js";
+import { explainTicket, rankBacklog } from "./api.js";
 import { openCache } from "./cache.js";
 import type { Ranking } from "./compose.js";
 import { HelpRequest, isHelpRequest, isRefusal, RefusalError } from "./errors.js";
 import { loadProject, type Project } from "./loader.js";
 import { loadRubric } from "./rubric.js";
-import { assertAllowed, parseSource } from "./source.js";
-import { renderTable } from "./table.js";
+import { assertAllowed, parseIssueKey, parseSource } from "./source.js";
+import { renderExplain, renderTable } from "./table.js";
 import { MAX_TIEBREAK } from "./tiebreak.js";
 
 export interface CliIo {
@@ -283,11 +283,46 @@ function rankVerb(deps: VerbDeps): VerbHandler {
   };
 }
 
+function explainVerb(deps: VerbDeps): VerbHandler {
+  return async (args, io) => {
+    const { values, positionals } = parseVerbArgs("explain", args);
+    const rubricName = requiredString("explain", values, "rubric");
+    if (positionals.length !== 1 || positionals[0] === undefined) {
+      throw usageError("explain", "explain takes exactly one issue key, such as octocat/hello-world#1");
+    }
+    const { source, key } = parseIssueKey(positionals[0]);
+    const project = await deps.resolve(deps.cwd(), io.env);
+    // The allowlist is checked before the rubric is read or anything
+    // leaves the machine.
+    assertAllowed(source, project.sources, project.allowlistKey);
+    const loaded = loadRubric(project.projectRoot, rubricName);
+    const tracker = project.tracker(source);
+    const engine = project.engine();
+    const cache = openCache(project.projectRoot, engine.id, engine.model, deps.now);
+    const result = await explainTicket({ rubric: loaded.rubric, tracker, key, engine, cache, now: deps.now });
+    const header = {
+      rubricPath: loaded.path,
+      rubricHash: loaded.hash,
+      configPath: project.configPath,
+      engine: engine.id,
+      model: engine.model,
+      backend: project.backend,
+    };
+    if (values.json === true) {
+      const { rubric, ...rest } = result;
+      const report = { rubric: rubric.name, ...header, source: source.spec, ...rest };
+      io.stdout(`${JSON.stringify(report, null, 2)}\n`);
+      return;
+    }
+    io.stdout(`${renderExplain({ header, result })}\n`);
+  };
+}
+
 function defaultVerbs(deps: VerbDeps): Record<Verb, VerbHandler> {
   return {
     rank: rankVerb(deps),
     calibrate: notImplemented("calibrate"),
-    explain: notImplemented("explain"),
+    explain: explainVerb(deps),
   };
 }
 

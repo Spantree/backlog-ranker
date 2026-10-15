@@ -5,6 +5,7 @@
  * its threshold, and why a row is pinned, held or flagged.
  */
 
+import type { ExplainResult } from "./api.js";
 import type { RankedRow, Ranking } from "./compose.js";
 import type { Rubric } from "./rubric.js";
 import type { ScoreStats } from "./score.js";
@@ -116,5 +117,52 @@ export function renderTable(opts: {
         `${t.truncatedPairs} pairs cut to share the prompt.`,
     );
   }
+  return lines.join("\n");
+}
+
+/** One ticket's reasoning: each criterion as a distribution over its
+ * levels, each gate against its threshold, and the flags they raise. */
+export function renderExplain(opts: { header: Omit<RunHeader, "source">; result: ExplainResult }): string {
+  const { header, result } = opts;
+  const { rubric } = result;
+  const floor = rubric.confidence_floor;
+  const lines = [
+    `backlog-decisions explain: rubric ${rubric.name} (${header.rubricPath}) (sha ${header.rubricHash})`,
+    `engine ${header.engine}/${header.model} via ${header.backend} (config ${header.configPath}); compose ${rubric.compose}; confidence floor ${floor.toFixed(2)}`,
+    "",
+    `${result.key}  ${result.title}`,
+    result.url,
+    `composite ${result.composite.toFixed(3)}`,
+  ];
+  for (const c of result.criteria) {
+    lines.push(
+      "",
+      `${c.id} (${c.direction}, weight ${c.weight}): score ${c.score.toFixed(2)}, confidence ${c.confidence.toFixed(2)}${
+        c.lowConfidence ? `? (under ${floor.toFixed(2)})` : ""
+      }`,
+    );
+    for (const l of c.levels) lines.push(`  ${l.index}  ${l.probability.toFixed(2)}  ${l.text}`);
+  }
+  lines.push("");
+  for (const g of result.gates) {
+    const sign = g.probability >= g.threshold ? "≥" : "<";
+    const outcome = !g.triggered ? "no effect" : g.action === "pin_top" ? "pinned" : "held";
+    lines.push(
+      `gate ${g.id} (${g.action}): ${g.probability.toFixed(2)} ${sign} ${g.threshold.toFixed(2)}: ${outcome}`,
+    );
+  }
+  const f = result.flags;
+  const flagList = [
+    ...f.pinnedBy.map((g) => `pinned:${g}`),
+    ...f.heldBy.map((g) => `held:${g}`),
+    ...f.lowConfidence.map((c) => `low-confidence:${c}`),
+    ...(f.truncated ? ["truncated"] : []),
+  ];
+  lines.push(
+    "",
+    `Flags: ${flagList.length === 0 ? "none" : flagList.join(" ")}.`,
+    `Body ${result.truncated ? "truncated to fit the prompt cap" : "sent whole"}.`,
+    `Engine: ${result.stats.requests} requests; answers from cache ${result.stats.cachedAnswers}, asked ${result.stats.askedAnswers}.`,
+  );
   return lines.join("\n");
 }
