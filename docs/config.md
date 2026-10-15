@@ -50,7 +50,7 @@ model: jev-1.14
 
 ## Linear states
 
-A GitHub source ranks every open issue. A Linear source ranks the issues of its team that are in the workflow states `linear.states` lists. Each entry matches a state by its name as Linear shows it (`Backlog`, `Todo`, `In Review`) or by its type (`triage`, `backlog`, `unstarted`, `started`, `completed`, `canceled`), ignoring case; names and types may be mixed.
+A GitHub source ranks every open issue. A Linear source ranks the issues of its team that are in the workflow states `linear.states` lists. Each entry matches a state by its name as Linear shows it (`Backlog`, `Todo`, `In Review`) or by its type as Linear reports it (`triage`, `backlog`, `unstarted`, `started`, `completed`, `canceled`, and on current workspaces `duplicate` for the Duplicate state), ignoring case; names and types may be mixed.
 
 ```yaml
 sources:
@@ -59,7 +59,7 @@ linear:
   states: [Backlog, Todo]
 ```
 
-Without `linear.states`, every state of type `backlog` or `unstarted` is ranked, which on Linear's default workflow is Backlog and Todo, and still holds when a team renames them. Triage, started, completed and canceled issues are left out. Naming a `started`, `completed` or `canceled` state is allowed, but ranking work that is in progress or finished is usually not what you want.
+Without `linear.states`, every state of type `backlog` or `unstarted` is ranked, which on Linear's default workflow is Backlog and Todo, and still holds when a team renames them. Triage, started, completed, canceled and duplicate issues are left out. Naming a `started`, `completed`, `canceled` or `duplicate` state is allowed, but ranking work that is in progress or finished is usually not what you want.
 
 Each run first reads the team's workflow states. An entry that matches none of them refuses before any issue is read, naming the entry and listing the team's states with their types, so a typo never silently ranks nothing. An empty list, or one that is not a list, is refused when the config is read. Issues in other states are never requested. `calibrate --hand` and `explain` read the issues they name in any state, so a calibration set may include issues that have since moved on.
 
