@@ -8,7 +8,14 @@ export {
   rankBacklog,
 } from "./api.js";
 export { type AnswerCache, CACHE_DIR, entryKey, openCache, questionHash } from "./cache.js";
-export { type CliIo, type ProjectResolver, type RunOptions, run } from "./cli.js";
+export {
+  type CliIo,
+  EXIT_NOT_TRUSTED,
+  type ProjectResolver,
+  parseHand,
+  type RunOptions,
+  run,
+} from "./cli.js";
 export { compositeOf, type RankedRow, type Ranking, rank, rubricQuestions, type Scored } from "./compose.js";
 export {
   CONFIG_DIR,
