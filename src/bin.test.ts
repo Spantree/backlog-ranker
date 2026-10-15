@@ -109,3 +109,41 @@ describe("built bin under node: rank in a temp project", () => {
     expect(r.stdout).toContain("backlog-ranker rank");
   });
 });
+
+/** Piped output is written asynchronously on macOS: exiting the moment
+ * the run returns cut it at the pipe's buffer (64 KiB under node). A
+ * config with tens of thousands of bad sources makes a refusal of more
+ * than a megabyte, one line per entry, all of which must arrive. */
+describe("built bin: large piped output drains before exit", () => {
+  const entries = 20_000;
+  let project: string;
+
+  beforeAll(() => {
+    project = mkdtempSync(join(tmpdir(), "backlog-ranker-drain-"));
+    mkdirSync(join(project, ".backlog-ranker"), { recursive: true });
+    const lines = Array.from({ length: entries }, (_, i) => `  - not-a-source-${i}`);
+    writeFileSync(
+      join(project, ".backlog-ranker", "config.yaml"),
+      `sources:\n${lines.join("\n")}\nbackend: openrouter\n`,
+    );
+  });
+
+  afterAll(() => {
+    rmSync(project, { recursive: true, force: true });
+  });
+
+  for (const runtime of ["node", "bun"]) {
+    test(`under ${runtime}, every byte of a >1 MB refusal arrives`, () => {
+      const proc = Bun.spawnSync([runtime, bin, "rank", "-r", "x", "-s", "github:a/b"], {
+        cwd: project,
+        env: { ...process.env },
+      });
+      const stderr = proc.stderr.toString();
+      expect(proc.exitCode).toBe(1);
+      // Booleans, so a failure does not print a megabyte.
+      expect(stderr.length > 1_000_000).toBe(true);
+      expect(stderr.includes(`sources.${entries - 1}: a source is`)).toBe(true);
+      expect(stderr.trimEnd().endsWith("(BACKLOG_RANKER_DEBUG=1 for a stack)")).toBe(true);
+    });
+  }
+});
