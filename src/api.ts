@@ -124,3 +124,28 @@ export async function rankBacklog(opts: RankOptions): Promise<RankResult> {
     opts.cache.flush();
   }
 }
+
+export async function calibrateBacklog(opts: CalibrateOptions): Promise<CalibrateResult> {
+  const hand = [...opts.hand];
+  if (new Set(hand).size !== hand.length) throw new RefusalError("the hand ranking lists a key twice");
+  if (hand.length < 2) throw new RefusalError("the hand ranking needs at least two issue keys, best first");
+  const rubric = resolveRubric(opts);
+  const now = opts.now ?? (() => new Date());
+  try {
+    const tickets = await readTickets(opts, (tracker) => tracker.issues(hand));
+    const { scored, stats } = await scoreTickets({
+      tickets,
+      rubric,
+      engine: opts.engine,
+      cache: opts.cache,
+      now: now(),
+      ...(opts.concurrency === undefined ? {} : { concurrency: opts.concurrency }),
+    });
+    const ranking = rank(rubric, scored);
+    // Held rows rank after every kept row: the tool would not put them mid-ranking.
+    const tool = [...ranking.ranked, ...ranking.held].map((r) => r.key);
+    return { rubric, calibration: kendallTau(hand, tool), tool, scored, ranking, stats };
+  } finally {
+    opts.cache.flush();
+  }
+}

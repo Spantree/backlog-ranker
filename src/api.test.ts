@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { rankBacklog } from "./api.js";
+import { calibrateBacklog, rankBacklog } from "./api.js";
 import { openCache } from "./cache.js";
 import type { DecisionAnswer, DecisionEngine } from "./engine.js";
 import { isRefusal } from "./errors.js";
@@ -210,6 +210,58 @@ criteria:
       rankBacklog({ ...base, tickets: TICKETS, tiebreak: 0 }),
     ]) {
       const err = await run.then(
+        () => undefined,
+        (e: unknown) => e,
+      );
+      expect(isRefusal(err)).toBe(true);
+    }
+    expect(engine.calls).toBe(0);
+  });
+});
+
+describe("calibrateBacklog", () => {
+  test("Kendall's tau of a hand ranking against the tool order, held rows last, issues read by key", async () => {
+    const engine = stubEngine();
+    const asked: string[][] = [];
+    const tracker: Tracker = {
+      source: "github:acme/app",
+      pending: async () => {
+        throw new Error("calibrate never reads the whole backlog");
+      },
+      issues: async (keys) => {
+        asked.push([...keys]);
+        return TICKETS.filter((t) => keys.includes(t.key));
+      },
+    };
+    const hand = ["acme/app#1", "acme/app#2", "acme/app#3", "acme/app#4"];
+    const result = await calibrateBacklog({
+      rubric: RUBRIC_PATH,
+      tracker,
+      hand,
+      engine,
+      cache: openCache(tmp(), engine.id, engine.model),
+      now: () => NOW,
+    });
+    expect(asked).toEqual([hand]);
+    expect(result.tool).toEqual(["acme/app#3", "acme/app#1", "acme/app#2", "acme/app#4"]);
+    // 4 of 6 pairs agree: tau = (4 - 2) / 6.
+    expect(result.calibration).toMatchObject({ n: 4, concordant: 4, discordant: 2, trusted: false });
+    expect(result.calibration.tau).toBeCloseTo(1 / 3);
+    expect(result.calibration.disagreements).toEqual([
+      { above: "acme/app#1", below: "acme/app#3" },
+      { above: "acme/app#2", below: "acme/app#3" },
+    ]);
+    expect(result.scored.map((s) => s.key)).toEqual(hand);
+    expect(result.ranking.held.map((r) => r.key)).toEqual(["acme/app#4"]);
+    expect(result.stats.requests).toBe(4);
+    expect(result.rubric.name).toBe("fixture-roi");
+  });
+
+  test("refuses a hand list with a key twice or fewer than two keys", async () => {
+    const engine = stubEngine();
+    const cache = openCache(tmp(), engine.id, engine.model);
+    for (const hand of [["acme/app#1", "acme/app#1"], ["acme/app#1"]]) {
+      const err = await calibrateBacklog({ rubric: RUBRIC_PATH, tickets: TICKETS, hand, engine, cache }).then(
         () => undefined,
         (e: unknown) => e,
       );
