@@ -11,9 +11,10 @@ import { calibrateBacklog, rankBacklog } from "./api.js";
 import { openCache } from "./cache.js";
 import type { Ranking } from "./compose.js";
 import { HelpRequest, isHelpRequest, isRefusal, RefusalError } from "./errors.js";
+import { BACKEND_NAMES, type BackendName, isBackendName } from "./jev/backends.js";
 import { TRUST_MIN_TICKETS, TRUST_TAU } from "./kendall.js";
-import { loadProject, type Project } from "./loader.js";
-import { loadRubric } from "./rubric.js";
+import { type LoadOptions, loadProject, type Project } from "./loader.js";
+import { isRubricPath, loadRubric, loadRubricFile } from "./rubric.js";
 import { assertAllowed, parseSource, type SourceRef } from "./source.js";
 import { grid, renderTable } from "./table.js";
 import { MAX_TIEBREAK } from "./tiebreak.js";
@@ -38,6 +39,7 @@ export type Verb = (typeof VERBS)[number];
 export type ProjectResolver = (
   cwd: string,
   env: Readonly<Record<string, string | undefined>>,
+  options?: LoadOptions,
 ) => Project | Promise<Project>;
 
 export interface RunOptions {
@@ -65,9 +67,9 @@ verbs:
 Run \`backlog-decisions <verb> --help\` for a verb's options.`;
 
 const VERB_USAGE: Record<Verb, string> = {
-  rank: `usage: backlog-decisions rank --rubric <name> --source <spec> [options]
+  rank: `usage: backlog-decisions rank --rubric <name|path> --source <spec> [options]
 
-  -r, --rubric <name>     Rubric under .backlog-decisions/rubrics/
+  -r, --rubric <name>     Rubric under .backlog-decisions/rubrics/, or a YAML file path
   -s, --source <spec>     github:owner/repo (linear:TEAM is planned)
   -w, --weight <id=n>     Override a criterion weight; repeatable
   -t, --tiebreak <n>      Pairwise tie-break depth
@@ -197,6 +199,23 @@ function weightOverrides(verb: Verb, values: Values): Record<string, number> | u
   return out;
 }
 
+/** `--allow-once` and its `--backend`: refused before anything is read. */
+function allowOnceOptions(verb: Verb, values: Values, source: SourceRef): LoadOptions {
+  const raw = values.backend;
+  if (raw !== undefined && values["allow-once"] !== true) {
+    throw usageError(verb, "--backend is accepted only with --allow-once; the config file names the backend");
+  }
+  let backend: BackendName | undefined;
+  if (raw !== undefined) {
+    if (typeof raw !== "string" || !isBackendName(raw)) {
+      throw usageError(verb, `--backend takes ${BACKEND_NAMES.join(" or ")}, not "${String(raw)}"`);
+    }
+    backend = raw;
+  }
+  if (values["allow-once"] !== true) return {};
+  return { allowOnce: source, ...(backend === undefined ? {} : { backend }) };
+}
+
 interface VerbDeps {
   resolve: ProjectResolver;
   cwd: () => string;
@@ -231,11 +250,20 @@ function rankVerb(deps: VerbDeps): VerbHandler {
     const weights = weightOverrides("rank", values);
     const top = boundedInt("rank", values, "tiebreak", MAX_TIEBREAK);
     const concurrency = boundedInt("rank", values, "concurrency", Number.MAX_SAFE_INTEGER);
-    const project = await deps.resolve(deps.cwd(), io.env);
+    const loadOptions = allowOnceOptions("rank", values, source);
+    const project = await deps.resolve(deps.cwd(), io.env, loadOptions);
     // The allowlist is checked before the rubric is read, the tracker is
     // built, or anything leaves the machine.
     assertAllowed(source, project.sources, project.allowlistKey);
-    const loaded = loadRubric(project.projectRoot, rubricName);
+    if (loadOptions.allowOnce !== undefined) {
+      io.stderr(
+        `the titles, bodies and labels of open issues in ${source.spec} will be sent to ` +
+          `${project.backend} for this run only; nothing is saved to config\n`,
+      );
+    }
+    const loaded = isRubricPath(rubricName)
+      ? loadRubricFile(rubricName, deps.cwd())
+      : loadRubric(project.projectRoot, rubricName);
     // The tracker first: an unsupported source should say so, not report
     // a missing engine key.
     const tracker = project.tracker(source);
