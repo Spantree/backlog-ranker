@@ -8,7 +8,7 @@ import { rankBacklog } from "backlog-decisions";
 
 ## The project path: loadProject
 
-`loadProject(cwd, env, options?)` is the path the CLI takes. It finds the project root, reads `.backlog-decisions/config.yaml` (or `config.local.yaml`), and returns the allowlist with an engine and a tracker that are built only when you ask for them. Check the source with `assertAllowed` before building either, as the CLI does: nothing is read from the environment and nothing is sent until then.
+`loadProject(cwd, env, options?)` is the path the CLI takes. It finds the project root, reads `.backlog-decisions/config.yaml` (or `config.local.yaml`), and returns the allowlist with an engine and a tracker that are built only when you ask for them. `tracker(source)` checks the source against the allowlist itself and refuses an unlisted one before reading a token or building anything. The CLI also calls `assertAllowed` first, so an unlisted source is refused before the rubric is read; do the same if your code reads anything before building the tracker.
 
 ```ts
 import { assertAllowed, loadProject, loadRubric, openCache, parseSource, rankBacklog } from "backlog-decisions";
@@ -30,7 +30,7 @@ console.log("held:", result.ranking.held.map((row) => row.key));
 console.log(result.stats.requests, "requests,", result.stats.cachedAnswers, "answers from cache");
 ```
 
-`Project` carries `projectRoot`, `configPath`, `config`, `sources`, `allowlistKey`, `backend`, `engine()` and `tracker(source)`. `engine()` refuses when the backend's key variable is unset; `tracker()` refuses when the GitHub token variable is unset, and refuses a `linear:` source as not built yet. `LoadOptions` takes `allowOnce` (a `SourceRef`), `backend` and `fetch` (a replacement for the global fetch, used by tests).
+`Project` carries `projectRoot`, `configPath`, `config`, `sources`, `allowlistKey`, `backend`, `engine()` and `tracker(source)`. `engine()` refuses when the backend's key variable is unset. `tracker()` refuses, in order, a source not on the allowlist (with the same wording as `assertAllowed`), a `linear:` source as not built yet, and an unset GitHub token variable. `LoadOptions` takes `allowOnce` (a `SourceRef` admitted for this project object only), `backend` and `fetch` (a replacement for the global fetch, used by tests).
 
 ## Building the pieces yourself
 

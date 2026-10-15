@@ -210,14 +210,17 @@ export function githubTracker(opts: GitHubTrackerOptions): Tracker {
   };
 }
 
+/** The refusal for a source whose adapter is planned but not built. */
+export function plannedAdapter(source: Extract<SourceRef, { kind: "linear" }>): SourceError {
+  return new SourceError(
+    `${source.spec} is a Linear source, and the Linear adapter is planned but not built yet; ` +
+      "backlog-decisions reads github:<owner>/<repo> sources today",
+  );
+}
+
 /** The tracker for a parsed source. GitHub is the one adapter today; a
  * `linear:` source parses but refuses as a planned adapter. */
 export function trackerFor(source: SourceRef, opts: Omit<GitHubTrackerOptions, "owner" | "repo">): Tracker {
-  if (source.kind === "linear") {
-    throw new SourceError(
-      `${source.spec} is a Linear source, and the Linear adapter is planned but not built yet; ` +
-        "backlog-decisions reads github:<owner>/<repo> sources today",
-    );
-  }
+  if (source.kind === "linear") throw plannedAdapter(source);
   return githubTracker({ ...opts, owner: source.owner, repo: source.repo });
 }

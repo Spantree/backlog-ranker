@@ -129,7 +129,7 @@ describe("loadProject", () => {
   });
 
   test("tracker() refuses naming the token variable and the gh commands", () => {
-    writeConfig("config.yaml", "sources: []\nbackend: typesafe\nkeys:\n  github: GH_RO_TOKEN\n");
+    writeConfig("config.yaml", "sources:\n  - github:kit/kit\nbackend: typesafe\nkeys:\n  github: GH_RO_TOKEN\n");
     const err = refusal(() =>
       loadProject(root, { GITHUB_TOKEN: "t" }).tracker(parseSource("github:kit/kit")),
     );
@@ -140,8 +140,26 @@ describe("loadProject", () => {
     expect(tracker.source).toBe("github:kit/kit");
   });
 
+  test("tracker() refuses an unlisted source with the allowlist refusal, reading no token", () => {
+    writeConfig("config.yaml", "sources:\n  - github:kit/kit\nbackend: typesafe\n");
+    const err = refusal(() => loadProject(root, {}).tracker(parseSource("github:other/repo")));
+    expect(err.message).toContain("github:other/repo is not on the backlog source allowlist");
+    expect(err.message).toContain("No request was sent");
+    expect(err.message).not.toContain("GITHUB_TOKEN");
+  });
+
+  test("tracker() admits the one source --allow-once names", () => {
+    writeConfig("config.yaml", "sources:\n  - github:kit/kit\nbackend: typesafe\n");
+    const other = parseSource("github:other/repo");
+    const project = loadProject(root, { GITHUB_TOKEN: "t" }, { allowOnce: other });
+    expect(project.tracker(other).source).toBe("github:other/repo");
+    expect(refusal(() => project.tracker(parseSource("github:third/repo"))).message).toContain(
+      "not on the backlog source allowlist",
+    );
+  });
+
   test("tracker() refuses a Linear source as a planned adapter", () => {
-    writeConfig("config.yaml", "sources: []\nbackend: typesafe\n");
+    writeConfig("config.yaml", "sources:\n  - linear:KIT\nbackend: typesafe\n");
     expect(refusal(() => loadProject(root, {}).tracker(parseSource("linear:KIT"))).message).toContain(
       "planned",
     );
