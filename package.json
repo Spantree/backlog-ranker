@@ -19,6 +19,8 @@
     "dist",
     "rubrics",
     "skills",
+    "docs",
+    "!docs/agents",
     "README.md",
     "LICENSE",
     "ROADMAP.md"
