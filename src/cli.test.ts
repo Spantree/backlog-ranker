@@ -53,6 +53,21 @@ describe("refusals", () => {
     expect(c.err()).toContain("BACKLOG_RANKER_DEBUG");
   });
 
+  test("the verb is required: a flag first is refused and runs nothing", async () => {
+    let called = false;
+    const c = capture();
+    const code = await run(["-r", "impact-roi", "-s", "github:octocat/hello-world"], c.io, {
+      verbs: {
+        rank: () => {
+          called = true;
+        },
+      },
+    });
+    expect(code).toBe(1);
+    expect(called).toBe(false);
+    expect(c.err()).toStartWith("unknown verb `-r`; expected one of rank, calibrate, explain");
+  });
+
   test("a bad flag on a verb refuses naming the flag", async () => {
     const c = capture();
     expect(await run(["rank", "--bogus"], c.io)).toBe(1);
@@ -67,6 +82,12 @@ describe("refusals", () => {
     expect(c.err()).toStartWith("unknown verb `bogus`");
     expect(c.err()).toMatch(/^\s+at /m);
     expect(c.err()).not.toContain("(BACKLOG_RANKER_DEBUG=1 for a stack)");
+  });
+
+  test("the debug variable from before the rename does nothing", async () => {
+    const c = capture({ [["BACKLOG", "DECISIONS", "DEBUG"].join("_")]: "1" });
+    expect(await run(["bogus"], c.io)).toBe(1);
+    expect(c.err()).not.toMatch(/^\s+at /m);
   });
 
   test("an empty BACKLOG_RANKER_DEBUG is unset", async () => {
