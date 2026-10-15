@@ -60,9 +60,9 @@ export function assertAllowed(source: SourceRef, allowlist: readonly string[], s
   const listed = allowed.size === 0 ? "it lists no sources" : `it lists ${[...allowed].join(", ")}`;
   throw new SourceError(
     `${source.spec} is not on the backlog source allowlist (${settingsKey}; ${listed}). ` +
-      `No request was sent. To rank this backlog, add "${source.spec}" to ${settingsKey} ` +
-      `in the project's committed settings, so the decision to send its tickets to the ` +
-      `decision engine is reviewed like any other change.`,
+      `No request was sent. To rank this backlog, add "${source.spec}" to ${settingsKey}, ` +
+      `so the decision to send its tickets to the decision engine is reviewed like any ` +
+      `other settings change.`,
   );
 }
 

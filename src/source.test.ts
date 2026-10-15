@@ -59,9 +59,9 @@ describe("assertAllowed", () => {
     expect(isRefusal(err)).toBe(true);
     expect((err as Error).message).toBe(
       "github:acme/app is not on the backlog source allowlist (sources in .backlog-ranker/config.yaml; it lists github:kit/kit). " +
-        'No request was sent. To rank this backlog, add "github:acme/app" to sources in .backlog-ranker/config.yaml ' +
-        "in the project's committed settings, so the decision to send its tickets to the " +
-        "decision engine is reviewed like any other change.",
+        'No request was sent. To rank this backlog, add "github:acme/app" to sources in .backlog-ranker/config.yaml, ' +
+        "so the decision to send its tickets to the decision engine is reviewed like any " +
+        "other settings change.",
     );
   });
 

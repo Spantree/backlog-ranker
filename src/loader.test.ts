@@ -184,6 +184,25 @@ describe("loadProject", () => {
     expect(err.message).not.toContain("GITHUB_TOKEN");
   });
 
+  test("the allowlist refusal names config.yaml when that is the file read", () => {
+    writeConfig("config.yaml", "sources:\n  - github:kit/kit\nbackend: typesafe\n");
+    const project = loadProject(root, {});
+    const err = refusal(() => project.tracker(parseSource("github:other/repo")));
+    expect(err.message).toContain('add "github:other/repo" to sources in .backlog-ranker/config.yaml');
+    expect(err.message).not.toContain("config.local.yaml");
+  });
+
+  test("the allowlist refusal names config.local.yaml when that is the file read", () => {
+    writeConfig("config.yaml", "sources:\n  - github:kit/kit\nbackend: typesafe\n");
+    writeConfig("config.local.yaml", "sources:\n  - github:mine/fork\nbackend: openrouter\n");
+    const project = loadProject(root, {});
+    expect(project.allowlistKey).toBe("sources in .backlog-ranker/config.local.yaml");
+    const err = refusal(() => project.tracker(parseSource("github:other/repo")));
+    expect(err.message).toContain('add "github:other/repo" to sources in .backlog-ranker/config.local.yaml');
+    expect(err.message).not.toContain("config.yaml");
+    expect(err.message).not.toContain("committed");
+  });
+
   test("tracker() admits the one source --allow-once names", () => {
     writeConfig("config.yaml", "sources:\n  - github:kit/kit\nbackend: typesafe\n");
     const other = parseSource("github:other/repo");
