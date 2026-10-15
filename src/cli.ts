@@ -7,7 +7,7 @@
  */
 
 import { type ParseArgsConfig, parseArgs } from "node:util";
-import { calibrateBacklog, rankBacklog } from "./api.js";
+import { calibrateBacklog, explainTicket, rankBacklog } from "./api.js";
 import { openCache } from "./cache.js";
 import type { Ranking } from "./compose.js";
 import { HelpRequest, isHelpRequest, isRefusal, RefusalError } from "./errors.js";
@@ -15,8 +15,8 @@ import { BACKEND_NAMES, type BackendName, isBackendName } from "./jev/backends.j
 import { TRUST_MIN_TICKETS, TRUST_TAU } from "./kendall.js";
 import { type LoadOptions, loadProject, type Project } from "./loader.js";
 import { isRubricPath, loadRubric, loadRubricFile } from "./rubric.js";
-import { assertAllowed, parseSource, type SourceRef } from "./source.js";
-import { grid, renderTable } from "./table.js";
+import { assertAllowed, parseIssueKey, parseSource, type SourceRef } from "./source.js";
+import { grid, renderExplain, renderTable } from "./table.js";
 import { MAX_TIEBREAK } from "./tiebreak.js";
 
 export interface CliIo {
@@ -95,8 +95,7 @@ Exits 2 when the tool's ranking is not trusted.`,
   -h, --help              This text`,
 };
 
-/** Flags each verb accepts today. The stubs parse them so a bad flag is
- * refused and `--help` answered before "not implemented yet". */
+/** Flags each verb accepts; anything else is refused as a usage error. */
 const VERB_FLAGS: Record<Verb, ParseArgsConfig["options"]> = {
   rank: {
     rubric: { type: "string", short: "r" },
@@ -141,13 +140,6 @@ export function parseVerbArgs(verb: Verb, args: readonly string[]): ReturnType<t
   }
   if (parsed.values.help === true) throw new HelpRequest(VERB_USAGE[verb]);
   return parsed;
-}
-
-function notImplemented(verb: Verb): VerbHandler {
-  return (args) => {
-    parseVerbArgs(verb, args);
-    throw new RefusalError(`${verb} is not implemented yet`);
-  };
 }
 
 type Values = ReturnType<typeof parseArgs>["values"];
@@ -431,11 +423,46 @@ function calibrateVerb(deps: VerbDeps): VerbHandler {
   };
 }
 
+function explainVerb(deps: VerbDeps): VerbHandler {
+  return async (args, io) => {
+    const { values, positionals } = parseVerbArgs("explain", args);
+    const rubricName = requiredString("explain", values, "rubric");
+    if (positionals.length !== 1 || positionals[0] === undefined) {
+      throw usageError("explain", "explain takes exactly one issue key, such as octocat/hello-world#1");
+    }
+    const { source, key } = parseIssueKey(positionals[0]);
+    const project = await deps.resolve(deps.cwd(), io.env);
+    // The allowlist is checked before the rubric is read or anything
+    // leaves the machine.
+    assertAllowed(source, project.sources, project.allowlistKey);
+    const loaded = loadRubric(project.projectRoot, rubricName);
+    const tracker = project.tracker(source);
+    const engine = project.engine();
+    const cache = openCache(project.projectRoot, engine.id, engine.model, deps.now);
+    const result = await explainTicket({ rubric: loaded.rubric, tracker, key, engine, cache, now: deps.now });
+    const header = {
+      rubricPath: loaded.path,
+      rubricHash: loaded.hash,
+      configPath: project.configPath,
+      engine: engine.id,
+      model: engine.model,
+      backend: project.backend,
+    };
+    if (values.json === true) {
+      const { rubric, ...rest } = result;
+      const report = { rubric: rubric.name, ...header, source: source.spec, ...rest };
+      io.stdout(`${JSON.stringify(report, null, 2)}\n`);
+      return;
+    }
+    io.stdout(`${renderExplain({ header, result })}\n`);
+  };
+}
+
 function defaultVerbs(deps: VerbDeps): Record<Verb, VerbHandler> {
   return {
     rank: rankVerb(deps),
     calibrate: calibrateVerb(deps),
-    explain: notImplemented("explain"),
+    explain: explainVerb(deps),
   };
 }
 

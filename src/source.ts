@@ -65,3 +65,16 @@ export function assertAllowed(source: SourceRef, allowlist: readonly string[], s
       `decision engine is reviewed like any other change.`,
   );
 }
+
+const ISSUE_KEY_RE = /^([\w.-]+)\/([\w.-]+)#([1-9]\d*)$/;
+
+/** Parses an issue key `owner/repo#123` into its GitHub source and number. */
+export function parseIssueKey(key: string): { source: SourceRef; number: number; key: string } {
+  const m = ISSUE_KEY_RE.exec(key);
+  if (m?.[1] === undefined || m[2] === undefined || m[3] === undefined) {
+    throw new SourceError(
+      `an issue key looks like <owner>/<repo>#<number> (for example octocat/hello-world#1), not "${key}"`,
+    );
+  }
+  return { source: parseSource(`github:${m[1]}/${m[2]}`), number: Number(m[3]), key };
+}

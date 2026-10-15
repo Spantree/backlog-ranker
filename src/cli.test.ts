@@ -61,13 +61,6 @@ describe("refusals", () => {
     expect(c.err()).not.toMatch(/^\s+at /m);
   });
 
-  test.each(["explain"])("%s is not implemented yet and refuses", async (verb) => {
-    const c = capture();
-    expect(await run([verb], c.io)).toBe(1);
-    expect(c.err()).toStartWith("RefusalError: ");
-    expect(c.err()).toContain("not implemented yet");
-  });
-
   test("BACKLOG_DECISIONS_DEBUG restores the frames and drops the hint", async () => {
     const c = capture({ BACKLOG_DECISIONS_DEBUG: "1" });
     expect(await run(["bogus"], c.io)).toBe(1);

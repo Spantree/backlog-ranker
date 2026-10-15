@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { calibrateBacklog, rankBacklog } from "./api.js";
+import { calibrateBacklog, explainTicket, rankBacklog } from "./api.js";
 import { openCache } from "./cache.js";
 import type { DecisionAnswer, DecisionEngine } from "./engine.js";
 import { isRefusal } from "./errors.js";
@@ -268,5 +268,76 @@ describe("calibrateBacklog", () => {
       expect(isRefusal(err)).toBe(true);
     }
     expect(engine.calls).toBe(0);
+  });
+});
+
+describe("explainTicket", () => {
+  test("after a rank against the same cache, explains a ticket asking the engine nothing", async () => {
+    const root = tmp();
+    const engine = stubEngine();
+    const ranked = await rankBacklog({
+      rubric: RUBRIC_PATH,
+      tickets: TICKETS,
+      engine,
+      cache: openCache(root, engine.id, engine.model),
+      now: () => NOW,
+    });
+    expect(engine.calls).toBe(4);
+    const tracker: Tracker = {
+      source: "github:acme/app",
+      pending: async () => {
+        throw new Error("explain never lists the backlog");
+      },
+      issues: async (keys) => TICKETS.filter((t) => keys.includes(t.key)),
+    };
+    const result = await explainTicket({
+      rubric: RUBRIC_PATH,
+      tracker,
+      key: "acme/app#3",
+      engine,
+      cache: openCache(root, engine.id, engine.model),
+      now: () => NOW,
+    });
+    expect(engine.calls).toBe(4);
+    expect(result.stats).toMatchObject({ tickets: 1, requests: 0, cachedAnswers: 4, askedAnswers: 0 });
+    expect(result.composite).toBe(ranked.ranking.ranked[0]?.composite ?? Number.NaN);
+    expect(result).toMatchObject({
+      key: "acme/app#3",
+      title: "token in a log",
+      truncated: false,
+      flags: { pinnedBy: ["security"], heldBy: [], lowConfidence: [], truncated: false },
+    });
+    expect(result.criteria.map((c) => [c.id, c.score, c.confidence, c.levels.length])).toEqual([
+      ["impact", 1, 0.9, 5],
+      ["effort", 3, 0.9, 5],
+    ]);
+    expect(result.gates.map((g) => [g.id, g.probability, g.triggered])).toEqual([
+      ["security", 0.9, true],
+      ["judgeable", 0.9, false],
+    ]);
+  });
+
+  test("explains a held ticket passed directly, and refuses an ambiguous input", async () => {
+    const engine = stubEngine();
+    const cache = openCache(tmp(), engine.id, engine.model);
+    const held = await explainTicket({
+      rubric: RUBRIC_PATH,
+      ticket: ticket(4, "something vague"),
+      engine,
+      cache,
+      now: () => NOW,
+    });
+    expect(held.flags.heldBy).toEqual(["judgeable"]);
+    expect(held.gates.find((g) => g.id === "judgeable")).toMatchObject({ probability: 0.2, triggered: true });
+    expect(engine.calls).toBe(1);
+    const tracker: Tracker = { source: "github:acme/app", pending: async () => [], issues: async () => [] };
+    for (const opts of [{}, { ticket: ticket(1, "big win"), tracker, key: "acme/app#1" }, { tracker }]) {
+      const err = await explainTicket({ rubric: RUBRIC_PATH, engine, cache, ...opts }).then(
+        () => undefined,
+        (e: unknown) => e,
+      );
+      expect(isRefusal(err)).toBe(true);
+    }
+    expect(engine.calls).toBe(1);
   });
 });
