@@ -4,7 +4,7 @@
 
 **Blocked by:** 09 (shipped content and docs)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
 - [ ] `bun run typecheck`, `bun run lint`, `bun run build`, `bun run test` all green
 - [ ] `node dist/bin.js` exercised for every verb; exit codes 0, 1 and 2 observed where the spec says
