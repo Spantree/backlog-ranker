@@ -93,7 +93,7 @@ for (const { above, below } of calibration.disagreements) console.log(`${above} 
 
 ## explainTicket
 
-Takes `rubric`, either `ticket` or both `tracker` and `key`, `engine`, `cache` and optionally `now`. Returns the composite, per-criterion `score`, `confidence`, `lowConfidence` and per-level `probability`, per-gate `probability`, `threshold` and `triggered`, `flags` and `stats`. A rubric can be built in memory with `rubricSchema.parse` (or `parseRubric(yamlText, origin)`), which applies the defaults:
+Takes the options every facade shares (`DecisionRunOptions`: `rubric`, `engine`, `cache` and optionally `now`) and either `ticket` or both `tracker` and `key`. Returns the composite, per-criterion `score`, `confidence`, `lowConfidence` and per-level `probability`, per-gate `probability`, `threshold` and `triggered`, `flags` (including `truncated`, when the body was cut to fit the prompt) and `stats`. A rubric can be built in memory with `rubricSchema.parse` (or `parseRubric(yamlText, origin)`), which applies the defaults:
 
 ```ts
 import { explainTicket, rubricSchema, type AnswerCache, type DecisionEngine, type Ticket } from "backlog-decisions";

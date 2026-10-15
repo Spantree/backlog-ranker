@@ -163,7 +163,7 @@ export function renderExplain(opts: { header: RunHeader; result: ExplainResult }
   lines.push(
     "",
     `Flags: ${flagList.length === 0 ? "none" : flagList.join(" ")}.`,
-    `Body ${result.truncated ? "truncated to fit the prompt cap" : "sent whole"}.`,
+    `Body ${result.flags.truncated ? "truncated to fit the prompt cap" : "sent whole"}.`,
     `Engine: ${result.stats.requests} requests; answers from cache ${result.stats.cachedAnswers}, asked ${result.stats.askedAnswers}.`,
   );
   return lines.join("\n");

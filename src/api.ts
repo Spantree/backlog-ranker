@@ -1,8 +1,9 @@
 /**
- * The library facades: rank and calibrate a backlog without the CLI.
+ * The library facades: rank, calibrate and explain without the CLI.
  * Each takes a rubric (object or YAML path), a decision engine, an open
- * answer cache and either a ticket list or a tracker, and returns what
- * the CLI renders. Both flush the cache before they return or throw.
+ * answer cache and its tickets (a list, or a tracker to read them from),
+ * and returns what the CLI renders. Each flushes the cache before it
+ * returns or throws.
  */
 
 import { readFileSync } from "node:fs";
@@ -18,18 +19,22 @@ import type { Ticket } from "./ticket.js";
 import { MAX_TIEBREAK, type TiebreakStats, tiebreak } from "./tiebreak.js";
 import type { Tracker } from "./trackers/tracker.js";
 
-export interface BacklogOptions {
+/** What every facade takes: the rubric, the engine, its cache and the clock. */
+export interface DecisionRunOptions {
   /** A parsed rubric, or the path of a rubric YAML file. */
   rubric: Rubric | string;
-  /** The tickets to rank. Exactly one of `tickets` and `tracker`. */
-  tickets?: readonly Ticket[];
-  /** The tracker to read tickets from. Exactly one of `tickets` and `tracker`. */
-  tracker?: Tracker;
   engine: DecisionEngine;
   /** An open answer cache for `engine`; flushed before the call returns. */
   cache: AnswerCache;
   /** The clock that buckets ticket ages. Defaults to the system clock. */
   now?: () => Date;
+}
+
+export interface BacklogOptions extends DecisionRunOptions {
+  /** The tickets to rank. Exactly one of `tickets` and `tracker`. */
+  tickets?: readonly Ticket[];
+  /** The tracker to read tickets from. Exactly one of `tickets` and `tracker`. */
+  tracker?: Tracker;
   /** Criterion weight overrides; never change a question or a cache key. */
   weights?: Readonly<Record<string, number>>;
   /** Engine requests in flight at once. */
@@ -66,7 +71,7 @@ export interface CalibrateResult {
   stats: ScoreStats;
 }
 
-function resolveRubric(opts: Pick<BacklogOptions, "rubric" | "weights">): Rubric {
+function resolveRubric(opts: DecisionRunOptions & Pick<BacklogOptions, "weights">): Rubric {
   const rubric =
     typeof opts.rubric === "string"
       ? parseRubric(readFileSync(opts.rubric, "utf8"), opts.rubric)
@@ -150,19 +155,12 @@ export async function calibrateBacklog(opts: CalibrateOptions): Promise<Calibrat
   }
 }
 
-export interface ExplainOptions {
-  /** A parsed rubric, or the path of a rubric YAML file. */
-  rubric: Rubric | string;
+export interface ExplainOptions extends DecisionRunOptions {
   /** The ticket to explain. Exactly one of `ticket` and `tracker` with `key`. */
   ticket?: Ticket;
   /** The tracker to read the ticket from, by `key`. */
   tracker?: Tracker;
   key?: string;
-  engine: DecisionEngine;
-  /** An open answer cache for `engine`; flushed before the call returns. */
-  cache: AnswerCache;
-  /** The clock that buckets ticket ages. Defaults to the system clock. */
-  now?: () => Date;
 }
 
 export interface ExplainedLevel {
@@ -196,10 +194,10 @@ export interface ExplainResult {
   key: string;
   title: string;
   url: string;
-  truncated: boolean;
   composite: number;
   criteria: ExplainedCriterion[];
   gates: ExplainedGate[];
+  /** `truncated`: the body was cut to fit the prompt budget. */
   flags: { pinnedBy: string[]; heldBy: string[]; lowConfidence: string[]; truncated: boolean };
   stats: ScoreStats;
 }
@@ -259,7 +257,6 @@ export async function explainTicket(opts: ExplainOptions): Promise<ExplainResult
       key: row.key,
       title: row.title,
       url: row.url,
-      truncated: row.truncated,
       composite: row.composite,
       criteria,
       gates,

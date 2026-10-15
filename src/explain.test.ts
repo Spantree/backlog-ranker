@@ -147,9 +147,10 @@ describe("explain", () => {
       key: "kit/kit#1",
       title: "Executor launches print the API key into the pane",
       url: "https://github.com/kit/kit/issues/1",
-      truncated: false,
       flags: { pinnedBy: ["security"], heldBy: [], lowConfidence: [], truncated: false },
     });
+    // Truncation is a flag only, not repeated at the top level.
+    expect(json).not.toHaveProperty("truncated");
     expect(typeof (json as unknown as { composite: number }).composite).toBe("number");
     expect(json.criteria.map((c) => c.id)).toEqual(["impact", "effort"]);
     expect(json.criteria[0]?.levels[4]).toMatchObject({

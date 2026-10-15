@@ -3,6 +3,7 @@ export {
   type CalibrateOptions,
   type CalibrateResult,
   calibrateBacklog,
+  type DecisionRunOptions,
   type ExplainedCriterion,
   type ExplainedGate,
   type ExplainedLevel,
