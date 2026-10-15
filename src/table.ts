@@ -5,8 +5,9 @@
  * its threshold, and why a row is pinned, held or flagged.
  */
 
-import type { ExplainResult } from "./api.js";
+import type { CalibrateResult, ExplainResult } from "./api.js";
 import type { RankedRow, Ranking } from "./compose.js";
+import { TRUST_MIN_TICKETS, TRUST_TAU } from "./kendall.js";
 import type { Rubric } from "./rubric.js";
 import type { ScoreStats } from "./score.js";
 import type { TiebreakStats } from "./tiebreak.js";
@@ -123,12 +124,12 @@ export function renderTable(opts: {
 
 /** One ticket's reasoning: each criterion as a distribution over its
  * levels, each gate against its threshold, and the flags they raise. */
-export function renderExplain(opts: { header: Omit<RunHeader, "source">; result: ExplainResult }): string {
+export function renderExplain(opts: { header: RunHeader; result: ExplainResult }): string {
   const { header, result } = opts;
   const { rubric } = result;
   const floor = rubric.confidence_floor;
   const lines = [
-    `backlog-decisions explain: rubric ${rubric.name} (${header.rubricPath}) (sha ${header.rubricHash})`,
+    `backlog-decisions explain: rubric ${rubric.name} (${header.rubricPath}) (sha ${header.rubricHash}), source ${header.source}`,
     `engine ${header.engine}/${header.model} via ${header.backend} (config ${header.configPath}); compose ${rubric.compose}; confidence floor ${floor.toFixed(2)}`,
     "",
     `${result.key}  ${result.title}`,
@@ -162,8 +163,44 @@ export function renderExplain(opts: { header: Omit<RunHeader, "source">; result:
   lines.push(
     "",
     `Flags: ${flagList.length === 0 ? "none" : flagList.join(" ")}.`,
-    `Body ${result.truncated ? "truncated to fit the prompt cap" : "sent whole"}.`,
+    `Body ${result.flags.truncated ? "truncated to fit the prompt cap" : "sent whole"}.`,
     `Engine: ${result.stats.requests} requests; answers from cache ${result.stats.cachedAnswers}, asked ${result.stats.askedAnswers}.`,
   );
+  return lines.join("\n");
+}
+
+/** The hand ranking beside the tool's order of the same tickets, tau
+ * and the trust verdict, and when not trusted the pairs that disagree. */
+export function renderCalibrate(opts: {
+  header: RunHeader;
+  hand: readonly string[];
+  result: CalibrateResult;
+}): string {
+  const { header, hand, result } = opts;
+  const { calibration, tool, stats } = result;
+  const rows = new Map([...result.ranking.ranked, ...result.ranking.held].map((r) => [r.key, r]));
+  const lines = [
+    `backlog-decisions calibrate: rubric ${result.rubric.name} (${header.rubricPath}) (sha ${header.rubricHash}), source ${header.source}, ${calibration.n} tickets`,
+    // A tau holds for one model version only: name it beside the number.
+    `engine ${header.engine}/${header.model} via ${header.backend} (config ${header.configPath})`,
+    "",
+    ...grid([
+      ["#", "hand", "tool", "tool composite", "title"],
+      ...hand.map((k, i) => {
+        const row = rows.get(tool[i] ?? "");
+        return [String(i + 1), k, row?.key ?? "-", row?.composite.toFixed(3) ?? "-", row?.title ?? ""];
+      }),
+    ]),
+    "",
+    `Kendall's tau ${calibration.tau.toFixed(3)} (${calibration.concordant} concordant, ${calibration.discordant} discordant pairs).`,
+    calibration.trusted
+      ? `TRUSTED: tau >= ${TRUST_TAU} on at least ${TRUST_MIN_TICKETS} tickets.`
+      : `NOT TRUSTED: needs tau >= ${TRUST_TAU} on at least ${TRUST_MIN_TICKETS} tickets (have ${calibration.tau.toFixed(3)} on ${calibration.n}).`,
+    `Engine: ${stats.tickets} tickets, ${stats.requests} requests; answers from cache ${stats.cachedAnswers}, asked ${stats.askedAnswers}.`,
+  ];
+  if (!calibration.trusted && calibration.disagreements.length > 0) {
+    lines.push("", "Pairs the rubric orders against the hand ranking (hand's choice first):");
+    for (const d of calibration.disagreements) lines.push(`  ${d.above} over ${d.below}`);
+  }
   return lines.join("\n");
 }

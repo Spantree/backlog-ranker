@@ -4,81 +4,47 @@
  * network. Ported from evie-kit's backlog CLI suite.
  */
 
-import { beforeEach, describe, expect, test } from "bun:test";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { type CliIo, run } from "./cli.js";
+import { run } from "./cli.js";
 import type { DecisionAnswer, DecisionEngine } from "./engine.js";
-import { FIXTURE_DIR, FIXTURE_NOW, type RequestCounts, replayFetch } from "./fixtures/replay.js";
-import { createJevEngine } from "./jev/index.js";
+import {
+  type CapturedIo,
+  captureIo,
+  FIXTURE_HASH,
+  fixtureProject,
+  fixtureRoot,
+  removeRoot,
+} from "./fixtures/project.js";
+import { FIXTURE_NOW, type RequestCounts } from "./fixtures/replay.js";
 import type { Project } from "./loader.js";
-import { RUBRIC_DIR, rubricHash } from "./rubric.js";
+import { RUBRIC_DIR } from "./rubric.js";
 import type { Ticket } from "./ticket.js";
-import { githubTracker } from "./trackers/github.js";
 import type { Tracker } from "./trackers/tracker.js";
+
+const SIX = "kit/kit#1,kit/kit#3,kit/kit#6,kit/kit#2,kit/kit#4,kit/kit#5";
 
 let root: string;
 let counts: RequestCounts;
 let resolve: () => Project;
-let out: string[];
-let err: string[];
-
-const io: CliIo = {
-  stdout: (text) => {
-    out.push(text);
-  },
-  stderr: (text) => {
-    err.push(text);
-  },
-  env: {},
-};
-
-const FIXTURE_HASH = rubricHash(readFileSync(join(FIXTURE_DIR, "rubric.yaml"), "utf8"));
-const SIX = "kit/kit#1,kit/kit#3,kit/kit#6,kit/kit#2,kit/kit#4,kit/kit#5";
-
-function fixtureProject(): Project {
-  const net = replayFetch();
-  counts = net.counts;
-  return {
-    projectRoot: root,
-    configPath: ".backlog-decisions/config.yaml",
-    config: {
-      sources: ["github:kit/kit"],
-      backend: "openrouter",
-      keys: { github: "GITHUB_TOKEN", typesafe: "TYPESAFE_API_KEY", openrouter: "OPENROUTER_API_KEY" },
-    },
-    sources: ["github:kit/kit"],
-    allowlistKey: "sources in .backlog-decisions/config.yaml",
-    backend: "openrouter",
-    engine: () =>
-      createJevEngine({
-        backend: "openrouter",
-        apiKey: "k-test",
-        fetch: net.fetch,
-        retry: { maxRetries: 0 },
-      }),
-    tracker: (source) => {
-      if (source.kind !== "github") throw new Error("fixture tracker is GitHub only");
-      return githubTracker({ owner: source.owner, repo: source.repo, token: "t", fetch: net.fetch });
-    },
-  };
-}
+let cap: CapturedIo;
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), "backlog-decisions-calibrate-"));
-  mkdirSync(join(root, RUBRIC_DIR), { recursive: true });
-  copyFileSync(join(FIXTURE_DIR, "rubric.yaml"), join(root, RUBRIC_DIR, "fixture.yaml"));
-  out = [];
-  err = [];
-  const project = fixtureProject();
-  resolve = () => project;
+  root = fixtureRoot("calibrate");
+  cap = captureIo();
+  const fixture = fixtureProject(root);
+  counts = fixture.counts;
+  resolve = () => fixture.project;
+});
+
+afterEach(() => {
+  removeRoot(root);
 });
 
 const calibrate = (...argv: string[]): Promise<number> =>
-  run(["calibrate", ...argv], io, { resolve: () => resolve(), cwd: () => root, now: () => FIXTURE_NOW });
-const stdout = (): string => out.join("");
-const stderr = (): string => err.join("");
+  run(["calibrate", ...argv], cap.io, { resolve: () => resolve(), cwd: () => root, now: () => FIXTURE_NOW });
+const stdout = (): string => cap.stdout();
+const stderr = (): string => cap.stderr();
 
 describe("calibrate", () => {
   test("six fixture tickets report tau and NOT TRUSTED, naming the engine, and exit 2", async () => {
@@ -150,6 +116,12 @@ describe("calibrate", () => {
     expect(counts).toEqual({ github: 0, jev: 0, other: 0 });
   });
 
+  test("--rubric takes a file path, resolved against the project root", async () => {
+    const path = join(RUBRIC_DIR, "fixture.yaml");
+    expect(await calibrate("-r", path, "-s", "github:kit/kit", "--hand", SIX, "--json")).toBe(2);
+    expect(JSON.parse(stdout())).toMatchObject({ rubricPath: path, rubricHash: FIXTURE_HASH });
+  });
+
   test("--hand is required", async () => {
     expect(await calibrate("-r", "fixture", "-s", "github:kit/kit")).toBe(1);
     expect(stderr()).toContain("--hand is required");
@@ -189,7 +161,7 @@ describe("calibrate", () => {
       pending: async () => tickets,
       issues: async (keys) => tickets.filter((t) => keys.includes(t.key)),
     };
-    const project = fixtureProject();
+    const { project } = fixtureProject(root);
     resolve = () => ({ ...project, engine: () => engine, tracker: () => tracker });
     const hand = tickets.map((t) => t.key.replace("kit/kit", "")).join(",");
     expect(await calibrate("-r", "fixture", "-s", "github:kit/kit", "--hand", hand)).toBe(0);

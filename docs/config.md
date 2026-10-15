@@ -61,7 +61,7 @@ For an allowed source:
 - To GitHub (https://api.github.com/graphql): read-only GraphQL queries, authenticated with the token. Nothing is ever written.
 - To the backend: per issue, its title, body, sorted labels and four facts computed locally (age bucket, reaction count, linked issue count, duplicate count). Comments and the text of linked issues are never read or sent. A body that would exceed the prompt budget is cut and marked.
 
-`rank --allow-once` admits the `--source` it is given for that one run, prints a line on stderr naming the source and the backend that will receive its issues, and writes nothing to config. With a config file it adds the source to the listed ones; `--backend` then replaces the configured backend for that run. Without a config file `--backend` is required, `model` is the default and every key variable is its default name. `calibrate` and `explain` have no `--allow-once`.
+`rank --allow-once` admits the `--source` it is given for that one run, prints a line on stderr naming the source and the backend that will receive its issues, and writes nothing to config. With a config file it adds the source to the listed ones and the config's backend receives the issues; `--backend` is refused there, because the committed config chooses the backend. Without a config file `--backend` is required, `model` is the default and every key variable is its default name. `calibrate` and `explain` have no `--allow-once`.
 
 ## Keys
 

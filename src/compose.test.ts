@@ -71,13 +71,13 @@ describe("rank", () => {
       row("UNSURE", { impact: score(2, 0.59), effort: score(2), security: noul(0.1), judgeable: noul(0.9) }),
     ]);
     expect(ranking.ranked.map((x) => x.key)).toEqual(["PINNED", "HIGH", "UNSURE"]);
-    expect(ranking.ranked[0]!.pinnedBy).toEqual(["security"]);
+    expect(ranking.ranked[0]?.pinnedBy).toEqual(["security"]);
     expect(ranking.held.map((x) => x.key)).toEqual(["THIN"]);
-    expect(ranking.held[0]!.heldBy).toEqual(["judgeable"]);
+    expect(ranking.held[0]?.heldBy).toEqual(["judgeable"]);
     // Low confidence is flagged for a human, never scored lower.
-    const unsure = ranking.ranked.find((x) => x.key === "UNSURE")!;
-    expect(unsure.lowConfidence).toEqual(["impact"]);
-    expect(unsure.composite).toBeCloseTo(3 / 3);
+    const unsure = ranking.ranked.find((x) => x.key === "UNSURE");
+    expect(unsure?.lowConfidence).toEqual(["impact"]);
+    expect(unsure?.composite).toBeCloseTo(3 / 3);
   });
 
   test("a pin wins over a hold: a thin security ticket stays on top, flagged", () => {
@@ -87,7 +87,7 @@ describe("rank", () => {
       row("OTHER", { impact: score(4), effort: score(0), security: noul(0.1), judgeable: noul(0.9) }),
     ]);
     expect(ranking.ranked.map((x) => x.key)).toEqual(["THIN-LEAK", "OTHER"]);
-    expect(ranking.ranked[0]!.heldBy).toEqual(["judgeable"]);
+    expect(ranking.ranked[0]?.heldBy).toEqual(["judgeable"]);
     expect(ranking.held).toEqual([]);
   });
 

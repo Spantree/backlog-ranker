@@ -304,7 +304,6 @@ describe("explainTicket", () => {
     expect(result).toMatchObject({
       key: "acme/app#3",
       title: "token in a log",
-      truncated: false,
       flags: { pinnedBy: ["security"], heldBy: [], lowConfidence: [], truncated: false },
     });
     expect(result.criteria.map((c) => [c.id, c.score, c.confidence, c.levels.length])).toEqual([

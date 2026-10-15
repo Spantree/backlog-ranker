@@ -14,18 +14,14 @@ import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 import { RefusalError } from "./errors.js";
 import { BACKEND_NAMES, JEV_MODELS } from "./jev/backends.js";
+import { DEFAULT_KEY_VARS } from "./keys.js";
 import { parseSource } from "./source.js";
 
 export const CONFIG_DIR = ".backlog-decisions";
 export const CONFIG_PATH = join(CONFIG_DIR, "config.yaml");
 export const LOCAL_CONFIG_PATH = join(CONFIG_DIR, "config.local.yaml");
 
-/** The environment variable each service's key is read from by default. */
-export const DEFAULT_KEY_VARS = {
-  github: "GITHUB_TOKEN",
-  typesafe: "TYPESAFE_API_KEY",
-  openrouter: "OPENROUTER_API_KEY",
-} as const;
+export { DEFAULT_KEY_VARS };
 
 const envVar = z
   .string()
@@ -109,8 +105,9 @@ export interface LoadedConfig {
   local: boolean;
 }
 
-/** Read the project's config, the local file first. */
-export function loadConfig(projectRoot: string): LoadedConfig {
+/** Read the project's config, the local file first; `undefined` when
+ * neither file exists. */
+export function readConfig(projectRoot: string): LoadedConfig | undefined {
   for (const [path, local] of [
     [LOCAL_CONFIG_PATH, true],
     [CONFIG_PATH, false],
@@ -118,6 +115,13 @@ export function loadConfig(projectRoot: string): LoadedConfig {
     const abs = join(projectRoot, path);
     if (existsSync(abs)) return { config: parseConfig(readFileSync(abs, "utf8"), path), path, local };
   }
+  return undefined;
+}
+
+/** Read the project's config, the local file first; refuses when none exists. */
+export function loadConfig(projectRoot: string): LoadedConfig {
+  const found = readConfig(projectRoot);
+  if (found !== undefined) return found;
   throw new ConfigError(
     `no config: expected ${join(projectRoot, CONFIG_PATH)} (or ${LOCAL_CONFIG_PATH} beside it). ` +
       `A minimal one:\n\n${CONFIG_EXAMPLE}\n`,

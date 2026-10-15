@@ -23,8 +23,9 @@ import { parseArgs } from "node:util";
 import { openCache } from "../src/cache.js";
 import { rank } from "../src/compose.js";
 import { FIXTURE_DIR, FIXTURE_NOW, jevFixtureName } from "../src/fixtures/replay.js";
-import { BACKENDS, DEFAULT_JEV_MODEL, isJevModel, JEV_MODELS } from "../src/jev/backends.js";
+import { DEFAULT_JEV_MODEL, isJevModel, JEV_MODELS } from "../src/jev/backends.js";
 import { createJevEngine, type JevFetch } from "../src/jev/engine.js";
+import { DEFAULT_KEY_VARS } from "../src/keys.js";
 import { parseRubric } from "../src/rubric.js";
 import { scoreTickets } from "../src/score.js";
 import { MAX_TIEBREAK, tiebreak } from "../src/tiebreak.js";
@@ -34,8 +35,8 @@ const { values } = parseArgs({ options: { model: { type: "string" } } });
 const model = values.model ?? DEFAULT_JEV_MODEL;
 if (!isJevModel(model)) throw new Error(`--model is "${model}", not one of ${JEV_MODELS.join(", ")}`);
 
-const apiKey = process.env[BACKENDS.openrouter.apiKeyVar];
-if (apiKey === undefined || apiKey === "") throw new Error(`${BACKENDS.openrouter.apiKeyVar} is not set`);
+const apiKey = process.env[DEFAULT_KEY_VARS.openrouter];
+if (apiKey === undefined || apiKey === "") throw new Error(`${DEFAULT_KEY_VARS.openrouter} is not set`);
 
 const rubric = parseRubric(readFileSync(join(FIXTURE_DIR, "rubric.yaml"), "utf8"), "rubric.yaml");
 const page = readFileSync(join(FIXTURE_DIR, "github-issues.json"), "utf8");

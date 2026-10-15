@@ -137,10 +137,10 @@ export function isRubricPath(value: string): boolean {
   return value.includes("/") || /\.ya?ml$/.test(value);
 }
 
-/** Read a rubric from a YAML file path, resolved against `cwd`; the
- * header names the path as given. */
-export function loadRubricFile(path: string, cwd: string): LoadedRubric {
-  const abs = resolve(cwd, path);
+/** Read a rubric from a YAML file path, resolved against `base` (the
+ * project root, for the CLI); the header names the path as given. */
+export function loadRubricFile(path: string, base: string): LoadedRubric {
+  const abs = resolve(base, path);
   if (!existsSync(abs)) throw new RubricError(`no rubric file ${path}`);
   const text = readFileSync(abs, "utf8");
   return { rubric: parseRubric(text, path), hash: rubricHash(text), path, local: false };
@@ -169,6 +169,12 @@ export function loadRubric(projectRoot: string, name: string): LoadedRubric {
   throw new RubricError(`no rubric "${name}": neither ${shared} nor ${local} exists`);
 }
 
+/** A `--rubric` value: a file path (see {@link isRubricPath}) resolved
+ * against the project root, or a name under `.backlog-decisions/rubrics/`. */
+export function loadRubricArg(projectRoot: string, value: string): LoadedRubric {
+  return isRubricPath(value) ? loadRubricFile(value, projectRoot) : loadRubric(projectRoot, value);
+}
+
 /** Apply `--weight id=value` overrides. Weights are composition inputs
  * only, so an override never changes a question or a cache key. */
 export function withWeights(rubric: Rubric, overrides: Readonly<Record<string, number>>): Rubric {
@@ -179,14 +185,15 @@ export function withWeights(rubric: Rubric, overrides: Readonly<Record<string, n
   }
   const next = {
     ...rubric,
-    criteria: rubric.criteria.map((c) =>
-      Object.hasOwn(overrides, c.id) ? { ...c, weight: overrides[c.id]! } : c,
-    ),
+    criteria: rubric.criteria.map((c) => {
+      const weight = Object.hasOwn(overrides, c.id) ? overrides[c.id] : undefined;
+      return weight === undefined ? c : { ...c, weight };
+    }),
   };
   const checked = rubricSchema.safeParse(next);
   if (!checked.success)
     throw new RubricError(
-      `the --weight overrides leave an invalid rubric: ${checked.error.issues[0]!.message}`,
+      `the --weight overrides leave an invalid rubric: ${checked.error.issues.map((i) => i.message).join("; ")}`,
     );
   return checked.data;
 }

@@ -24,7 +24,7 @@ describe("parseRubric", () => {
       ["security", "pin_top", 0.5],
       ["judgeable", "flag_if_below", 0.5],
     ]);
-    expect(parseRubric(minimal(), "m").criteria[0]!.weight).toBe(1);
+    expect(parseRubric(minimal(), "m").criteria[0]?.weight).toBe(1);
     expect(parseRubric(minimal(), "m").confidence_floor).toBe(0.5);
   });
 
@@ -110,14 +110,14 @@ describe("withWeights", () => {
   test("overrides weights without touching questions", () => {
     const r = parseRubric(FIXTURE, "f");
     const w = withWeights(r, { impact: 3 });
-    expect(w.criteria[0]!.weight).toBe(3);
-    expect(w.criteria[0]!.question).toBe(r.criteria[0]!.question);
-    expect(r.criteria[0]!.weight).toBe(1);
+    expect(w.criteria[0]?.weight).toBe(3);
+    expect(w.criteria[0]?.question).toBe(r.criteria[0]?.question);
+    expect(r.criteria[0]?.weight).toBe(1);
   });
 
   test("a criterion named like an Object property is not overridden by inheritance", () => {
     const r = parseRubric(minimal().replace("id: impact", "id: constructor"), "m");
-    expect(withWeights(r, {}).criteria[0]!.weight).toBe(1);
+    expect(withWeights(r, {}).criteria[0]?.weight).toBe(1);
     expect(() => withWeights(r, { toString: 2 } as Record<string, number>)).toThrow("not a criterion");
   });
 

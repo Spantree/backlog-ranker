@@ -30,8 +30,6 @@ export interface Backend {
   readonly name: BackendName;
   /** The SDK's API root; the SDK appends `/v1/systemone`. */
   readonly baseURL: string;
-  /** The environment variable that carries this backend's API key. */
-  readonly apiKeyVar: string;
   /** Every spelling under which this backend reports `model` as the one
    * that answered. A dated snapshot suffix on any of them is accepted
    * separately (see `servesPinnedModel`). */
@@ -42,14 +40,12 @@ export const BACKENDS: Readonly<Record<BackendName, Backend>> = {
   typesafe: {
     name: "typesafe",
     baseURL: "https://api.typesafe.ai",
-    apiKeyVar: "TYPESAFE_API_KEY",
     // Recorded: `jev-1.14.0`, the release's `.0` patch spelling.
     servedSpellings: (model) => [model, `${model}.0`],
   },
   openrouter: {
     name: "openrouter",
     baseURL: "https://openrouter.ai/api",
-    apiKeyVar: "OPENROUTER_API_KEY",
     // Recorded: `typesafe/jev-1.14-20261014`, provider-prefixed and dated.
     servedSpellings: (model) => [model, `typesafe/${model}`],
   },

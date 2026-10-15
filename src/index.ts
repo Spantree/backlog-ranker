@@ -3,6 +3,7 @@ export {
   type CalibrateOptions,
   type CalibrateResult,
   calibrateBacklog,
+  type DecisionRunOptions,
   type ExplainedCriterion,
   type ExplainedGate,
   type ExplainedLevel,
@@ -36,6 +37,7 @@ export {
   type LoadedConfig,
   loadConfig,
   parseConfig,
+  readConfig,
 } from "./config.js";
 export type { Decision, DecisionAnswer, DecisionEngine, DecisionQuestion } from "./engine.js";
 export {
@@ -70,6 +72,7 @@ export {
   type Gate,
   type LoadedRubric,
   loadRubric,
+  loadRubricArg,
   loadRubricFile,
   parseRubric,
   RUBRIC_DIR,

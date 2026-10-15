@@ -4,74 +4,45 @@
  * flags, answered from the cache after a `rank`.
  */
 
-import { beforeEach, describe, expect, test } from "bun:test";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { CACHE_DIR } from "./cache.js";
-import { type CliIo, run } from "./cli.js";
-import { FIXTURE_DIR, FIXTURE_NOW, type RequestCounts, replayFetch } from "./fixtures/replay.js";
-import { createJevEngine } from "./jev/index.js";
+import { run } from "./cli.js";
+import {
+  type CapturedIo,
+  captureIo,
+  FIXTURE_HASH,
+  fixtureProject,
+  fixtureRoot,
+  removeRoot,
+} from "./fixtures/project.js";
+import { FIXTURE_NOW, type RequestCounts } from "./fixtures/replay.js";
 import type { Project } from "./loader.js";
-import { RUBRIC_DIR, rubricHash } from "./rubric.js";
-import { githubTracker } from "./trackers/github.js";
+import { RUBRIC_DIR } from "./rubric.js";
 
 let root: string;
 let counts: RequestCounts;
 let resolve: () => Project;
-let out: string[];
-let err: string[];
-
-const io: CliIo = {
-  stdout: (text) => {
-    out.push(text);
-  },
-  stderr: (text) => {
-    err.push(text);
-  },
-  env: {},
-};
-
-const FIXTURE_HASH = rubricHash(readFileSync(join(FIXTURE_DIR, "rubric.yaml"), "utf8"));
+let cap: CapturedIo;
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), "backlog-decisions-explain-"));
-  mkdirSync(join(root, RUBRIC_DIR), { recursive: true });
-  copyFileSync(join(FIXTURE_DIR, "rubric.yaml"), join(root, RUBRIC_DIR, "fixture.yaml"));
-  out = [];
-  err = [];
-  const net = replayFetch();
-  counts = net.counts;
-  resolve = () => ({
-    projectRoot: root,
-    configPath: ".backlog-decisions/config.yaml",
-    config: {
-      sources: ["github:kit/kit"],
-      backend: "openrouter",
-      keys: { github: "GITHUB_TOKEN", typesafe: "TYPESAFE_API_KEY", openrouter: "OPENROUTER_API_KEY" },
-    },
-    sources: ["github:kit/kit"],
-    allowlistKey: "sources in .backlog-decisions/config.yaml",
-    backend: "openrouter",
-    engine: () =>
-      createJevEngine({
-        backend: "openrouter",
-        apiKey: "k-test",
-        fetch: net.fetch,
-        retry: { maxRetries: 0 },
-      }),
-    tracker: (source) => {
-      if (source.kind !== "github") throw new Error("fixture tracker is GitHub only");
-      return githubTracker({ owner: source.owner, repo: source.repo, token: "t", fetch: net.fetch });
-    },
-  });
+  root = fixtureRoot("explain");
+  cap = captureIo();
+  const fixture = fixtureProject(root);
+  counts = fixture.counts;
+  resolve = () => fixture.project;
+});
+
+afterEach(() => {
+  removeRoot(root);
 });
 
 const opts = () => ({ resolve: () => resolve(), cwd: () => root, now: () => FIXTURE_NOW });
-const explain = (...argv: string[]): Promise<number> => run(["explain", ...argv], io, opts());
-const rank = (...argv: string[]): Promise<number> => run(["rank", ...argv], io, opts());
-const stdout = (): string => out.join("");
-const stderr = (): string => err.join("");
+const explain = (...argv: string[]): Promise<number> => run(["explain", ...argv], cap.io, opts());
+const rank = (...argv: string[]): Promise<number> => run(["rank", ...argv], cap.io, opts());
+const stdout = (): string => cap.stdout();
+const stderr = (): string => cap.stderr();
 
 describe("explain", () => {
   test("cold, prints one ticket's reasoning after exactly one engine request", async () => {
@@ -79,7 +50,7 @@ describe("explain", () => {
     expect(stderr()).toBe("");
     expect(counts).toEqual({ github: 1, jev: 1, other: 0 });
     const text = stdout();
-    expect(text).toContain(`(sha ${FIXTURE_HASH})`);
+    expect(text.split("\n")[0]).toContain(`(sha ${FIXTURE_HASH}), source github:kit/kit`);
     expect(text).toContain("engine typesafe/jev-1.14 via openrouter");
     expect(text).toContain("kit/kit#1");
     expect(text).toContain("Executor launches print the API key into the pane");
@@ -94,13 +65,19 @@ describe("explain", () => {
   test("after a rank, answers every question from the cache and sends no engine request", async () => {
     expect(await rank("--rubric", "fixture", "--source", "github:kit/kit")).toBe(0);
     const before = { ...counts };
-    out.length = 0;
+    cap.clear();
     expect(await explain("-r", "fixture", "kit/kit#3")).toBe(0);
     expect(stderr()).toBe("");
     expect(counts.jev).toBe(before.jev);
     // The ticket itself is still read from GitHub: one lookup.
     expect(counts.github - before.github).toBe(1);
     expect(stdout()).toContain("Engine: 0 requests; answers from cache 4, asked 0.");
+  });
+
+  test("--rubric takes a file path, resolved against the project root", async () => {
+    const path = join(RUBRIC_DIR, "fixture.yaml");
+    expect(await explain("-r", path, "kit/kit#1", "--json")).toBe(0);
+    expect(JSON.parse(stdout())).toMatchObject({ rubricPath: path, rubricHash: FIXTURE_HASH });
   });
 
   test("a held ticket shows the gate under its threshold and the hold", async () => {
@@ -141,9 +118,10 @@ describe("explain", () => {
       key: "kit/kit#1",
       title: "Executor launches print the API key into the pane",
       url: "https://github.com/kit/kit/issues/1",
-      truncated: false,
       flags: { pinnedBy: ["security"], heldBy: [], lowConfidence: [], truncated: false },
     });
+    // Truncation is a flag only, not repeated at the top level.
+    expect(json).not.toHaveProperty("truncated");
     expect(typeof (json as unknown as { composite: number }).composite).toBe("number");
     expect(json.criteria.map((c) => c.id)).toEqual(["impact", "effort"]);
     expect(json.criteria[0]?.levels[4]).toMatchObject({
@@ -164,7 +142,8 @@ describe("explain", () => {
     "a malformed key %s refuses with zero requests",
     async (key) => {
       expect(await explain("--rubric", "fixture", key)).toBe(1);
-      expect(stderr()).toMatch(/^\w*Error: /);
+      // A refusal prints its message first, with no class-name prefix.
+      expect(stderr()).toStartWith("an issue key looks like");
       expect(stderr()).toContain("<owner>/<repo>#<number>");
       expect(counts).toEqual({ github: 0, jev: 0, other: 0 });
     },

@@ -8,7 +8,7 @@ import { rankBacklog } from "backlog-decisions";
 
 ## The project path: loadProject
 
-`loadProject(cwd, env, options?)` is the path the CLI takes. It finds the project root, reads `.backlog-decisions/config.yaml` (or `config.local.yaml`), and returns the allowlist with an engine and a tracker that are built only when you ask for them. Check the source with `assertAllowed` before building either, as the CLI does: nothing is read from the environment and nothing is sent until then.
+`loadProject(cwd, env, options?)` is the path the CLI takes. It finds the project root, reads `.backlog-decisions/config.yaml` (or `config.local.yaml`), and returns the allowlist with an engine and a tracker that are built only when you ask for them. `tracker(source)` checks the source against the allowlist itself and refuses an unlisted one before reading a token or building anything. The CLI also calls `assertAllowed` first, so an unlisted source is refused before the rubric is read; do the same if your code reads anything before building the tracker.
 
 ```ts
 import { assertAllowed, loadProject, loadRubric, openCache, parseSource, rankBacklog } from "backlog-decisions";
@@ -30,7 +30,7 @@ console.log("held:", result.ranking.held.map((row) => row.key));
 console.log(result.stats.requests, "requests,", result.stats.cachedAnswers, "answers from cache");
 ```
 
-`Project` carries `projectRoot`, `configPath`, `config`, `sources`, `allowlistKey`, `backend`, `engine()` and `tracker(source)`. `engine()` refuses when the backend's key variable is unset; `tracker()` refuses when the GitHub token variable is unset, and refuses a `linear:` source as not built yet. `LoadOptions` takes `allowOnce` (a `SourceRef`), `backend` and `fetch` (a replacement for the global fetch, used by tests).
+`Project` carries `projectRoot`, `configPath`, `config`, `sources`, `allowlistKey`, `backend`, `engine()` and `tracker(source)`. `engine()` refuses when the backend's key variable is unset. `tracker()` refuses, in order, a source not on the allowlist (with the same wording as `assertAllowed`), a `linear:` source as not built yet, and an unset GitHub token variable. `LoadOptions` takes `allowOnce` (a `SourceRef` admitted for this project object only), `backend` and `fetch` (a replacement for the global fetch, used by tests).
 
 ## Building the pieces yourself
 
@@ -57,7 +57,7 @@ const { ranking } = await rankBacklog({
 console.log(ranking.ranked.map((row) => row.key));
 ```
 
-`createJevEngine(options)`: `backend` (`"typesafe"` or `"openrouter"`), `apiKey`, and optionally `model` (default `jev-1.14`; an unknown version refuses), `fetch`, `retry` (the SDK's retry policy, partially overridden; by default 408, 429 and 5xx are retried twice with backoff) and `timeoutMs` (per attempt, default 60000).
+`createJevEngine(options)`: `backend` (`"typesafe"` or `"openrouter"`), `apiKey`, and optionally `apiKeyVar` (the variable named when the backend refuses the key, default the backend's entry in `DEFAULT_KEY_VARS`), `model` (default `jev-1.14`; an unknown version refuses), `fetch`, `retry` (the SDK's retry policy, partially overridden; by default 408, 429 and 5xx are retried twice with backoff) and `timeoutMs` (per attempt, default 60000).
 
 `githubTracker(options)`: `owner`, `repo`, `token`, and optionally `fetch` and `tokenEnvVar` (named in auth refusals, default `GITHUB_TOKEN`). `trackerFor(source, options)` builds the tracker for a parsed `SourceRef`.
 
@@ -93,7 +93,7 @@ for (const { above, below } of calibration.disagreements) console.log(`${above} 
 
 ## explainTicket
 
-Takes `rubric`, either `ticket` or both `tracker` and `key`, `engine`, `cache` and optionally `now`. Returns the composite, per-criterion `score`, `confidence`, `lowConfidence` and per-level `probability`, per-gate `probability`, `threshold` and `triggered`, `flags` and `stats`. A rubric can be built in memory with `rubricSchema.parse` (or `parseRubric(yamlText, origin)`), which applies the defaults:
+Takes the options every facade shares (`DecisionRunOptions`: `rubric`, `engine`, `cache` and optionally `now`) and either `ticket` or both `tracker` and `key`. Returns the composite, per-criterion `score`, `confidence`, `lowConfidence` and per-level `probability`, per-gate `probability`, `threshold` and `triggered`, `flags` (including `truncated`, when the body was cut to fit the prompt) and `stats`. A rubric can be built in memory with `rubricSchema.parse` (or `parseRubric(yamlText, origin)`), which applies the defaults:
 
 ```ts
 import { explainTicket, rubricSchema, type AnswerCache, type DecisionEngine, type Ticket } from "backlog-decisions";

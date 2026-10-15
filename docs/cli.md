@@ -19,23 +19,24 @@ Every verb reads `.backlog-decisions/config.yaml` from the project root and chec
 usage: backlog-decisions rank --rubric <name|path> --source <spec> [options]
 
   -r, --rubric <name>     Rubric under .backlog-decisions/rubrics/, or a YAML file path
+                          (a relative path resolves against the project root)
   -s, --source <spec>     github:owner/repo (linear:TEAM is planned)
   -w, --weight <id=n>     Override a criterion weight; repeatable
   -t, --tiebreak <n>      Pairwise tie-break depth
       --concurrency <n>   Parallel engine requests
   -j, --json              Machine-readable output
       --allow-once        Admit this source for one run, never persisted
-      --backend <name>    With --allow-once: typesafe or openrouter
+      --backend <name>    With --allow-once and no config: typesafe or openrouter
   -h, --help              This text
 ```
 
 Ranks every open issue of the source (pull requests are never included) and prints a table: one row per issue with its composite, each criterion's score and confidence, each gate's probability against its threshold, and its flags. Issues held by a `flag_if_below` gate are listed below the ranking.
 
-- `--rubric` takes a name, resolved as `.backlog-decisions/rubrics/<name>.local.yaml` then `<name>.yaml`, or a file path (contains `/` or ends in `.yaml`/`.yml`) resolved against the working directory.
+- `--rubric` takes a name, resolved as `.backlog-decisions/rubrics/<name>.local.yaml` then `<name>.yaml`, or a file path (contains `/` or ends in `.yaml`/`.yml`). A relative path resolves against the project root (the nearest directory holding `.backlog-decisions/` or `.git`), or the working directory when there is none. `calibrate` and `explain` take `--rubric` the same way.
 - `--weight <criterion>=<number>` may repeat; the last value for a criterion wins. It never sends a new request.
 - `--tiebreak` takes 1 to 10. Asks pairwise questions over the top rows; see [rubrics.md](rubrics.md#tie-break).
 - `--concurrency` takes a whole number of at least 1. Default 8.
-- `--allow-once` admits `--source` for this run only and prints what will be sent. `--backend` is accepted only with it, and is required when no config file exists.
+- `--allow-once` admits `--source` for this run only and prints what will be sent. `--backend` applies only with it and only when no config file exists, and is required then; with a config file the committed config chooses the backend and `--backend` is refused.
 
 ```bash
 backlog-decisions rank -r impact-roi -s github:acme/app -w impact=2 -t 5
@@ -44,9 +45,10 @@ backlog-decisions rank -r impact-roi -s github:acme/app -w impact=2 -t 5
 ## calibrate
 
 ```text
-usage: backlog-decisions calibrate --rubric <name> --source <spec> --hand KEY,KEY,... [options]
+usage: backlog-decisions calibrate --rubric <name|path> --source <spec> --hand KEY,KEY,... [options]
 
-  -r, --rubric <name>     Rubric under .backlog-decisions/rubrics/
+  -r, --rubric <name>     Rubric under .backlog-decisions/rubrics/, or a YAML file path
+                          (a relative path resolves against the project root)
   -s, --source <spec>     github:owner/repo (linear:TEAM is planned)
       --hand <keys>       Hand ranking, best first, comma separated
   -w, --weight <id=n>     Override a criterion weight; repeatable
@@ -67,14 +69,17 @@ backlog-decisions calibrate -r impact-roi -s github:acme/app --hand '#12,#7,#31,
 ## explain
 
 ```text
-usage: backlog-decisions explain --rubric <name> <owner/repo#123> [options]
+usage: backlog-decisions explain --rubric <name|path> <owner/repo#123> [options]
 
-  -r, --rubric <name>     Rubric under .backlog-decisions/rubrics/
+  -r, --rubric <name>     Rubric under .backlog-decisions/rubrics/, or a YAML file path
+                          (a relative path resolves against the project root)
   -j, --json              Machine-readable output
   -h, --help              This text
+
+Decision-model answers come from the cache after a rank; one GitHub lookup reads the issue.
 ```
 
-Prints one issue's composite, each criterion's per-level probabilities, score and confidence, each gate's probability against its threshold and whether it pinned or held the issue, and its flags. The source is the key's repository, which must be on the allowlist. Answers come from the cache when a `rank` already asked them; otherwise one request is sent.
+Prints one issue's composite, each criterion's per-level probabilities, score and confidence, each gate's probability against its threshold and whether it pinned or held the issue, and its flags. The source is the key's repository, which must be on the allowlist, and the header names it. Decision-model answers come from the cache after a rank; one GitHub lookup reads the issue. Without cached answers, one decision-model request is sent.
 
 ```bash
 backlog-decisions explain -r impact-roi acme/app#42
@@ -90,7 +95,7 @@ backlog-decisions explain -r impact-roi acme/app#42
 
 ## Errors and BACKLOG_DECISIONS_DEBUG
 
-A refusal (something you can fix: a usage error, a missing config, an unlisted source, an unset key, a failed request) prints its message first and no stack trace, followed by `(BACKLOG_DECISIONS_DEBUG=1 for a stack)`. Set `BACKLOG_DECISIONS_DEBUG` to any non-empty value to print the stack frames too. Unexpected errors always print their frames. Causes are printed after the error, each on a `caused by:` line.
+A refusal (something you can fix: a usage error, a missing config, an unlisted source, an unset key, a failed request) prints just its message (no error class name) and no stack trace, followed by `(BACKLOG_DECISIONS_DEBUG=1 for a stack)`. Set `BACKLOG_DECISIONS_DEBUG` to any non-empty value to print the stack frames too. Unexpected errors print `Name: message` and always their frames. Causes are printed after the error, each on a `caused by:` line.
 
 ## JSON output
 
@@ -112,4 +117,4 @@ Each row: `position` (1-based; `null` for held rows), `key`, `title`, `url`, `co
 
 `calibrate`: `rubric`, `rubricHash`, `rubricPath`, `configPath`, `source`, `engine`, `model`, `backend`, `hand` (the expanded keys), `tool` (the tool's order of the same keys), `stats`, and the calibration: `n`, `concordant`, `discordant`, `tau`, `trusted`, `disagreements` (`{ "above", "below" }` pairs, the hand ranking's choice first). The exit code is 2 when `trusted` is false, with or without `--json`.
 
-`explain`: `rubric`, `rubricPath`, `rubricHash`, `configPath`, `engine`, `model`, `backend`, `source`, `key`, `title`, `url`, `truncated`, `composite`, `criteria` (each `id`, `direction`, `weight`, `score`, `confidence`, `lowConfidence`, and `levels` as `{ "index", "text", "probability" }`), `gates` (each `id`, `action`, `threshold`, `probability`, `triggered`), `flags` (`pinnedBy`, `heldBy`, `lowConfidence`, `truncated`) and `stats`.
+`explain`: `rubric`, `rubricPath`, `rubricHash`, `configPath`, `source`, `engine`, `model`, `backend`, `key`, `title`, `url`, `composite`, `criteria` (each `id`, `direction`, `weight`, `score`, `confidence`, `lowConfidence`, and `levels` as `{ "index", "text", "probability" }`), `gates` (each `id`, `action`, `threshold`, `probability`, `triggered`), `flags` (`pinnedBy`, `heldBy`, `lowConfidence`, `truncated`: the body was cut to fit the prompt) and `stats`.

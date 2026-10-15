@@ -100,14 +100,16 @@ describe("rank --allow-once", () => {
     expect(readdirSync(join(root, ".backlog-decisions")).sort()).toEqual(["cache", "config.yaml"]);
   });
 
-  test("with a config, --backend overrides its backend for the run only", async () => {
+  test("with a config, --backend refuses: the committed config chooses the backend", async () => {
     const path = writeConfig("sources:\n  - github:kit/kit\nbackend: typesafe\n");
     const before = readFileSync(path);
     expect(
       await rank("-r", RUBRIC_FILE, "-s", "github:kit/kit", "--allow-once", "--backend", "openrouter"),
-    ).toBe(0);
-    expect(stderr()).toContain("will be sent to openrouter");
-    expect(stdout()).toContain("via openrouter");
+    ).toBe(1);
+    expect(stderr()).toContain("the committed config chooses the backend");
+    expect(stderr()).toContain("--backend only applies with --allow-once when no config exists");
+    expect(stdout()).toBe("");
+    expect(counts).toEqual({ github: 0, jev: 0, other: 0 });
     expect(readFileSync(path).equals(before)).toBe(true);
   });
 
@@ -134,7 +136,7 @@ describe("rank --allow-once", () => {
     expect(readdirSync(root)).toEqual([]);
   });
 
-  test("a relative rubric file path resolves against the working directory", async () => {
+  test("with no root marker, a relative rubric path resolves against the working directory", async () => {
     writeFileSync(join(root, "mine.yml"), readFileSync(RUBRIC_FILE));
     expect(
       await rank("-r", "mine.yml", "-s", "github:kit/kit", "--allow-once", "--backend", "openrouter"),

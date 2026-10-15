@@ -6,23 +6,22 @@
  * any request leaves the machine.
  */
 
-import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   CONFIG_PATH,
   type Config,
   DEFAULT_KEY_VARS,
   findProjectRoot,
-  LOCAL_CONFIG_PATH,
   type LoadedConfig,
   loadConfig,
+  readConfig,
 } from "./config.js";
 import type { DecisionEngine } from "./engine.js";
 import { RefusalError } from "./errors.js";
 import type { BackendName } from "./jev/backends.js";
 import { createJevEngine } from "./jev/index.js";
-import type { SourceRef } from "./source.js";
-import { type FetchFn, tokenHint, trackerFor } from "./trackers/github.js";
+import { assertAllowed, type SourceRef } from "./source.js";
+import { type FetchFn, plannedAdapter, tokenHint, trackerFor } from "./trackers/github.js";
 import type { Tracker } from "./trackers/tracker.js";
 
 /** Where the allowlist lives, named in the refusal. */
@@ -40,7 +39,8 @@ export interface Project {
   backend: string;
   /** Built on first call; refuses when the backend's key variable is unset. */
   engine(): DecisionEngine;
-  /** Refuses when the GitHub token variable is unset. */
+  /** Refuses a source off the allowlist (the `allowOnce` one is on it),
+   * then a planned adapter, then an unset GitHub token variable. */
   tracker(source: SourceRef): Tracker;
 }
 
@@ -48,8 +48,8 @@ export interface Project {
 export interface LoadOptions {
   /** `--allow-once`: admit this one source for this process. */
   allowOnce?: SourceRef;
-  /** `--backend` (with `--allow-once`): the backend for this run; required
-   * when no config file exists. */
+  /** `--backend` (with `--allow-once`): the backend for this run when no
+   * config file exists, and required then. Refused when a config exists. */
   backend?: BackendName;
   /** Replaces the global fetch for the engine and the tracker, for tests. */
   fetch?: FetchFn;
@@ -70,10 +70,20 @@ function present(value: string | undefined): value is string {
 }
 
 /** The config file, or with `--allow-once --backend` and no file an
- * ephemeral one admitting only that source. Nothing is ever written. */
+ * ephemeral one admitting only that source. Nothing is ever written.
+ * With a file, the committed config chooses the backend. */
 function resolveConfig(projectRoot: string, options: LoadOptions): Pick<LoadedConfig, "config" | "path"> {
-  const hasFile = [LOCAL_CONFIG_PATH, CONFIG_PATH].some((p) => existsSync(join(projectRoot, p)));
-  if (hasFile || options.allowOnce === undefined) return loadConfig(projectRoot);
+  const found = readConfig(projectRoot);
+  if (found !== undefined) {
+    if (options.backend !== undefined) {
+      throw new LoaderError(
+        `the committed config chooses the backend (${found.path} names ${found.config.backend}); ` +
+          "--backend only applies with --allow-once when no config exists",
+      );
+    }
+    return found;
+  }
+  if (options.allowOnce === undefined) return loadConfig(projectRoot);
   if (options.backend === undefined) {
     throw new LoaderError(
       `--backend is required with --allow-once when no config exists ` +
@@ -93,10 +103,7 @@ export function loadProject(
 ): Project {
   const projectRoot = findProjectRoot(cwd);
   const loaded = resolveConfig(projectRoot, options);
-  const config: Config = {
-    ...loaded.config,
-    ...(options.backend === undefined ? {} : { backend: options.backend }),
-  };
+  const { config } = loaded;
   const sources =
     options.allowOnce === undefined ? config.sources : [...config.sources, options.allowOnce.spec];
   const fetchOpt = options.fetch === undefined ? {} : { fetch: options.fetch };
@@ -120,14 +127,18 @@ export function loadProject(
       engine = createJevEngine({
         backend: config.backend,
         apiKey,
+        apiKeyVar: keyVar,
         ...fetchOpt,
         ...(config.model === undefined ? {} : { model: config.model }),
       });
       return engine;
     },
     tracker(source) {
+      // Defence for library callers: the CLI checks first, so its refusal
+      // precedes the rubric read; nothing is built for an unlisted source.
+      assertAllowed(source, sources, ALLOWLIST_KEY);
+      if (source.kind === "linear") throw plannedAdapter(source);
       const tokenEnvVar = config.keys.github;
-      if (source.kind === "linear") return trackerFor(source, { token: "", tokenEnvVar });
       const token = env[tokenEnvVar];
       if (!present(token)) throw new LoaderError(`${tokenEnvVar} is not set. ${tokenHint(tokenEnvVar)}`);
       return trackerFor(source, { token, tokenEnvVar, ...fetchOpt });

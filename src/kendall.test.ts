@@ -16,8 +16,10 @@ describe("kendallTau", () => {
     const keys = Array.from({ length: 12 }, (_, i) => `K${i}`);
     // Swapping 13 of 66 pairs leaves tau = (53 - 13) / 66 ≈ 0.606.
     const tool = [...keys];
-    for (let i = 0; i + 1 < tool.length; i += 1)
-      if (i % 2 === 0) [tool[i], tool[i + 1]] = [tool[i + 1]!, tool[i]!];
+    for (let i = 0; i + 1 < tool.length; i += 2) {
+      const [a, b] = [tool[i], tool[i + 1]];
+      if (a !== undefined && b !== undefined) [tool[i], tool[i + 1]] = [b, a];
+    }
     const result = kendallTau(keys, tool);
     expect(result.tau).toBeGreaterThanOrEqual(0.4);
     expect(result.trusted).toBe(true);
