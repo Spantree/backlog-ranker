@@ -1,7 +1,9 @@
 /**
  * The GitHub fixture page and the Linear fixture team's pending issues
  * must make the same tickets, keys and urls aside: the same titles,
- * bodies, labels, createdAt and fact counts. The recorded decision-model
+ * bodies, labels, createdAt and model-visible fact counts. The facts kept
+ * from the model (open blockers, open closing PRs, assignees) are each
+ * tracker's own and left out here. The recorded decision-model
  * answers are keyed by a state hash that excludes the key, so both
  * sources replay the same recordings.
  */
@@ -11,7 +13,14 @@ import type { Ticket } from "./ticket.js";
 import { githubTracker } from "./trackers/github.js";
 import { linearTracker } from "./trackers/linear.js";
 
-const sansKey = ({ key: _key, url: _url, ...rest }: Ticket) => rest;
+const sansKey = ({
+  key: _key,
+  url: _url,
+  openBlockers: _blockers,
+  openClosingPrs: _prs,
+  assignees: _assignees,
+  ...rest
+}: Ticket) => rest;
 
 test("the GitHub fixture page and the Linear fixture team make the same tickets", async () => {
   const net = replayFetch();

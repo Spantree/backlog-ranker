@@ -39,7 +39,8 @@ const node = (identifier: string, extra: Record<string, unknown> = {}): Record<s
   labels: { nodes: [{ name: "Bug" }] },
   reactions: [{ id: "r" }],
   relations: { nodes: [{ type: "duplicate" }, { type: "related" }] },
-  inverseRelations: { nodes: [{ type: "blocks" }] },
+  inverseRelations: { nodes: [{ type: "blocks", issue: { state: { type: "unstarted" } } }] },
+  assignee: null,
   ...extra,
 });
 
@@ -67,6 +68,106 @@ async function refusalOf(promise: Promise<unknown>): Promise<Error> {
   return err as Error;
 }
 
+/** One pending-page reply carrying `nodes`. */
+const pageOf =
+  (...nodes: Record<string, unknown>[]) =>
+  () =>
+    Response.json({ data: { issues: { pageInfo: { hasNextPage: false, endCursor: null }, nodes } } });
+
+/** A relation of `type` whose other issue is in a state of `stateType`. */
+const blocker = (type: string, stateType: string) => ({ type, issue: { state: { type: stateType } } });
+
+describe("facts kept from the model: open blockers, open closing PRs, assignees", () => {
+  test("the fixture team: an open blocker counts, a closed one does not; an assignee is 1", async () => {
+    const net = replayFetch();
+    const tickets = await linearTracker({
+      team: "KIT",
+      apiKey: "k",
+      states: ["started"],
+      fetch: net.fetch,
+    }).pending();
+    expect(tickets.map((t) => [t.key, t.openBlockers, t.openClosingPrs, t.assignees])).toEqual([
+      ["KIT-7", 1, 0, 0],
+      ["KIT-8", 0, 0, 1],
+    ]);
+    // linked issues stay relations plus inverse relations, blockers included.
+    expect(tickets.find((t) => t.key === "KIT-7")).toMatchObject({ linkedIssues: 2, duplicates: 0 });
+  });
+
+  test("only inverse blocks relations from open issues count as blockers", async () => {
+    const linear = fakeLinear(
+      pageOf(
+        node("EVA-1", {
+          // EVA-1 blocks two issues: that does not block EVA-1.
+          relations: { nodes: [{ type: "blocks" }, { type: "blocks" }] },
+          inverseRelations: {
+            nodes: [
+              blocker("blocks", "triage"),
+              blocker("blocks", "backlog"),
+              blocker("blocks", "unstarted"),
+              blocker("blocks", "started"),
+              blocker("blocks", "completed"),
+              blocker("blocks", "canceled"),
+              blocker("blocks", "duplicate"),
+              blocker("related", "started"),
+              blocker("duplicate", "backlog"),
+            ],
+          },
+        }),
+      ),
+    );
+    const [ticket] = await linearTracker({ team: "EVA", apiKey: "k", fetch: linear.fetch }).pending();
+    expect(ticket).toMatchObject({ openBlockers: 4, linkedIssues: 11, duplicates: 1 });
+  });
+
+  test("assignees is 1 with an assignee and 0 without; closing PRs are always 0", async () => {
+    const linear = fakeLinear(
+      pageOf(
+        node("EVA-1", { assignee: { id: "u1" } }),
+        node("EVA-2", { assignee: null, inverseRelations: { nodes: [] } }),
+      ),
+    );
+    const tickets = await linearTracker({ team: "EVA", apiKey: "k", fetch: linear.fetch }).pending();
+    expect(tickets.map((t) => [t.key, t.assignees, t.openClosingPrs, t.openBlockers])).toEqual([
+      ["EVA-1", 1, 0, 1],
+      ["EVA-2", 0, 0, 0],
+    ]);
+  });
+
+  test("the lookup by key fills the same facts", async () => {
+    const net = replayFetch();
+    const tickets = await linearTracker({ team: "KIT", apiKey: "k", fetch: net.fetch }).issues([
+      "KIT-7",
+      "KIT-8",
+    ]);
+    expect(tickets.map((t) => [t.key, t.openBlockers, t.assignees])).toEqual([
+      ["KIT-7", 1, 0],
+      ["KIT-8", 0, 1],
+    ]);
+  });
+
+  test.each([
+    [
+      "a blocker without its state",
+      { inverseRelations: { nodes: [{ type: "blocks", issue: {} }] } },
+      "issues.nodes.0.inverseRelations.nodes.0.issue.state",
+    ],
+    [
+      "a blocker state type that is not a string",
+      { inverseRelations: { nodes: [blocker("blocks", 3 as unknown as string)] } },
+      "issues.nodes.0.inverseRelations.nodes.0.issue.state.type",
+    ],
+    ["an assignee that is not an object", { assignee: "someone" }, "issues.nodes.0.assignee"],
+    ["a missing assignee field", { assignee: undefined }, "issues.nodes.0.assignee"],
+  ])("refuses %s, naming the field path", async (_name, extra, path) => {
+    const linear = fakeLinear(pageOf(node("EVA-1", extra)));
+    const err = await refusalOf(linearTracker({ team: "EVA", apiKey: "k", fetch: linear.fetch }).pending());
+    expect(err.message).toBe(
+      `Linear's reply did not have the expected shape while listing EVA's pending issues (at ${path})`,
+    );
+  });
+});
+
 describe("pending()", () => {
   test("reads the Backlog and Todo issues of the fixture team by default", async () => {
     const net = replayFetch();
@@ -89,6 +190,9 @@ describe("pending()", () => {
       reactions: 2,
       linkedIssues: 1,
       duplicates: 0,
+      openBlockers: 0,
+      openClosingPrs: 0,
+      assignees: 0,
     });
     expect(tickets.find((t) => t.key === "KIT-3")).toMatchObject({
       reactions: 1,
@@ -121,6 +225,7 @@ describe("pending()", () => {
       reactions: 1,
       linkedIssues: 3,
       duplicates: 1,
+      openBlockers: 1,
     });
     expect(linear.sent).toHaveLength(3);
     for (const s of linear.sent) {

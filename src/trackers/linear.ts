@@ -24,6 +24,8 @@ export const LINEAR_KEY_URL = "https://linear.app/settings/account/security";
 /** The pending states when the config names none: matched by type. */
 export const DEFAULT_LINEAR_STATES = ["backlog", "unstarted"] as const;
 const PAGE_SIZE = 100;
+/** Workflow state types that close an issue, so it blocks nothing. */
+const CLOSED_STATE_TYPES = new Set(["completed", "canceled", "duplicate"]);
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 export interface LinearTrackerOptions {
@@ -46,7 +48,8 @@ const ISSUE_FIELDS = `identifier title description url createdAt
   labels(first: 100) { nodes { name } }
   reactions { id }
   relations(first: 100) { nodes { type } }
-  inverseRelations(first: 100) { nodes { type } }`;
+  inverseRelations(first: 100) { nodes { type issue { state { type } } } }
+  assignee { id }`;
 
 const STATES_QUERY = `query($team: String!) {
   workflowStates(first: 250, filter: { team: { key: { eq: $team } } }) { nodes { id name type } }
@@ -70,7 +73,14 @@ const issueSchema = z.object({
   labels: z.object({ nodes: z.array(z.object({ name: z.string() })) }),
   reactions: z.array(z.unknown()),
   relations: z.object({ nodes: z.array(z.object({ type: z.string() })) }),
-  inverseRelations: z.object({ nodes: z.array(z.object({ type: z.string() })) }),
+  /** Relations other issues hold to this one: on "A blocks B", B sees the
+   * relation here with A as its `issue`. */
+  inverseRelations: z.object({
+    nodes: z.array(
+      z.object({ type: z.string(), issue: z.object({ state: z.object({ type: z.string() }) }) }),
+    ),
+  }),
+  assignee: z.object({ id: z.string() }).nullable(),
 });
 
 const statesSchema = z.object({
@@ -133,6 +143,14 @@ function toTicket(node: IssueNode): Ticket {
     reactions: node.reactions.length,
     linkedIssues: relations.length,
     duplicates: relations.filter((r) => r.type === "duplicate").length,
+    openBlockers: node.inverseRelations.nodes.filter(
+      (r) => r.type === "blocks" && !CLOSED_STATE_TYPES.has(r.issue.state.type),
+    ).length,
+    // Linear's attachments carry a pull request's URL but not its state
+    // (open, merged, closed), so open closing PRs cannot be counted here.
+    openClosingPrs: 0,
+    // A Linear issue has at most one assignee.
+    assignees: node.assignee === null ? 0 : 1,
   };
 }
 

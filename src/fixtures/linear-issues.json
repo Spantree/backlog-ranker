@@ -40,6 +40,7 @@
           "inverseRelations": {
             "nodes": []
           },
+          "assignee": null,
           "state": {
             "id": "st-todo",
             "name": "Todo",
@@ -66,6 +67,7 @@
           "inverseRelations": {
             "nodes": []
           },
+          "assignee": null,
           "state": {
             "id": "st-backlog",
             "name": "Backlog",
@@ -96,10 +98,16 @@
           "inverseRelations": {
             "nodes": [
               {
-                "type": "duplicate"
+                "type": "duplicate",
+                "issue": {
+                  "state": {
+                    "type": "started"
+                  }
+                }
               }
             ]
           },
+          "assignee": null,
           "state": {
             "id": "st-todo",
             "name": "Todo",
@@ -126,6 +134,7 @@
           "inverseRelations": {
             "nodes": []
           },
+          "assignee": null,
           "state": {
             "id": "st-backlog",
             "name": "Backlog",
@@ -148,6 +157,7 @@
           "inverseRelations": {
             "nodes": []
           },
+          "assignee": null,
           "state": {
             "id": "st-backlog",
             "name": "Backlog",
@@ -174,6 +184,7 @@
           "inverseRelations": {
             "nodes": []
           },
+          "assignee": null,
           "state": {
             "id": "st-todo",
             "name": "Todo",
@@ -194,8 +205,26 @@
             "nodes": []
           },
           "inverseRelations": {
-            "nodes": []
+            "nodes": [
+              {
+                "type": "blocks",
+                "issue": {
+                  "state": {
+                    "type": "started"
+                  }
+                }
+              },
+              {
+                "type": "blocks",
+                "issue": {
+                  "state": {
+                    "type": "completed"
+                  }
+                }
+              }
+            ]
           },
+          "assignee": null,
           "state": {
             "id": "st-progress",
             "name": "In Progress",
@@ -217,6 +246,9 @@
           },
           "inverseRelations": {
             "nodes": []
+          },
+          "assignee": {
+            "id": "user-1"
           },
           "state": {
             "id": "st-review",
@@ -240,6 +272,7 @@
           "inverseRelations": {
             "nodes": []
           },
+          "assignee": null,
           "state": {
             "id": "st-done",
             "name": "Done",
@@ -262,6 +295,7 @@
           "inverseRelations": {
             "nodes": []
           },
+          "assignee": null,
           "state": {
             "id": "st-triage",
             "name": "Triage",
