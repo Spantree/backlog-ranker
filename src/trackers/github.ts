@@ -121,15 +121,39 @@ export function tokenHint(tokenEnvVar: string): string {
   return `Set ${tokenEnvVar} to a token that can read the repository; with the gh CLI: gh auth login, then export ${tokenEnvVar}=$(gh auth token)`;
 }
 
+interface HttpReply {
+  headers?: Record<string, string | undefined>;
+  data?: unknown;
+}
+
+/** GitHub's primary and secondary rate limits answer 429, or 403 with a
+ * `retry-after` header, no requests remaining, or a message naming the
+ * rate limit; any other 403 is the token. */
+function rateLimited(status: number, reply: HttpReply): boolean {
+  if (status === 429) return true;
+  if (status !== 403) return false;
+  const headers = reply.headers ?? {};
+  if (headers["retry-after"] !== undefined || headers["x-ratelimit-remaining"] === "0") return true;
+  const message = (reply.data as { message?: unknown } | null | undefined)?.message ?? reply.data;
+  return typeof message === "string" && /rate limit/i.test(message);
+}
+
+const rateLimitRefusal = (operation: string) =>
+  new GitHubTrackerError(`GitHub rate-limited the request while ${operation}; retry later`);
+
 /** Translates whatever octokit threw into a value-free refusal. */
 function refusalFor(err: unknown, operation: string, tokenEnvVar: string): GitHubTrackerError {
   if (err instanceof GraphqlResponseError) {
+    if (err.errors?.some((e) => (e as { type?: unknown }).type === "RATE_LIMITED")) {
+      return rateLimitRefusal(operation);
+    }
     return new GitHubTrackerError(`GitHub answered HTTP 200 with GraphQL errors while ${operation}`);
   }
-  const e = err as { name?: unknown; status?: unknown; response?: unknown } | null;
+  const e = err as { name?: unknown; status?: unknown; response?: HttpReply } | null;
   if (e?.name === "HttpError" && typeof e.status === "number") {
     // octokit reports a network failure as status 500 with no response.
     if (e.response === undefined) return new GitHubTrackerError(`could not reach GitHub while ${operation}`);
+    if (rateLimited(e.status, e.response)) return rateLimitRefusal(operation);
     if (e.status === 401 || e.status === 403) {
       return new GitHubTrackerError(
         `GitHub refused the token while ${operation} (HTTP ${e.status}). ${tokenHint(tokenEnvVar)}`,

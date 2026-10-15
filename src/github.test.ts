@@ -212,6 +212,37 @@ describe("githubTracker errors", () => {
     expect(err.message).toContain("export KIT_GH=$(gh auth token)");
   });
 
+  test.each([
+    ["HTTP 429", () => new Response("", { status: 429 })],
+    [
+      "HTTP 403 with retry-after",
+      () => Response.json({ message: "slow down" }, { status: 403, headers: { "retry-after": "60" } }),
+    ],
+    [
+      "HTTP 403 with no requests remaining",
+      () => Response.json({ message: "x" }, { status: 403, headers: { "x-ratelimit-remaining": "0" } }),
+    ],
+    [
+      "HTTP 403 naming a secondary rate limit",
+      () =>
+        Response.json({ message: "You have exceeded a secondary rate limit. secret-text" }, { status: 403 }),
+    ],
+    [
+      "a RATE_LIMITED GraphQL error",
+      () =>
+        Response.json({
+          data: null,
+          errors: [{ type: "RATE_LIMITED", message: "API rate limit exceeded secret-text" }],
+        }),
+    ],
+  ])("%s refuses as a rate limit, not a bad token", async (_, reply) => {
+    const gh = fakeGitHub(reply);
+    const err = await caught(
+      githubTracker({ owner: "o", repo: "r", token: "ghp_secret", fetch: gh.fetch }).pending(),
+    );
+    expect(err.message).toBe("GitHub rate-limited the request while listing o/r's open issues; retry later");
+  });
+
   test("other HTTP failures name the operation and status only", async () => {
     const gh = fakeGitHub(() => Response.json({ message: "boom with secret detail" }, { status: 502 }));
     const err = await caught(githubTracker({ owner: "o", repo: "r", token: "t", fetch: gh.fetch }).pending());
