@@ -83,7 +83,14 @@ export {
   withWeights,
 } from "./rubric.js";
 export { DEFAULT_CONCURRENCY, longestQuestionBytes, pool, type ScoreStats, scoreTickets } from "./score.js";
-export { assertAllowed, parseIssueKey, parseSource, SourceError, type SourceRef } from "./source.js";
+export {
+  assertAllowed,
+  issueKeyIn,
+  parseIssueKey,
+  parseSource,
+  SourceError,
+  type SourceRef,
+} from "./source.js";
 export {
   AGE_BUCKETS,
   type AgeBucket,
@@ -112,6 +119,14 @@ export {
   type GitHubTrackerOptions,
   githubTracker,
   tokenHint,
-  trackerFor,
 } from "./trackers/github.js";
-export type { Tracker } from "./trackers/tracker.js";
+export { type TrackerOptions, trackerFor } from "./trackers/index.js";
+export {
+  DEFAULT_LINEAR_STATES,
+  LINEAR_GRAPHQL_ENDPOINT,
+  LinearTrackerError,
+  type LinearTrackerOptions,
+  linearKeyHint,
+  linearTracker,
+} from "./trackers/linear.js";
+export type { FetchFn, Tracker } from "./trackers/tracker.js";

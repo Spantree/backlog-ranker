@@ -50,7 +50,7 @@ describe("calibrate", () => {
   test("six fixture tickets report tau and NOT TRUSTED, naming the engine, and exit 2", async () => {
     expect(await calibrate("--rubric", "fixture", "--source", "github:kit/kit", "--hand", SIX)).toBe(2);
     expect(stderr()).toBe("");
-    expect(counts).toEqual({ github: 6, jev: 6, other: 0 });
+    expect(counts).toEqual({ github: 6, linear: 0, jev: 6, other: 0 });
     const text = stdout();
     expect(text).toContain("backlog-ranker calibrate: rubric fixture-roi");
     expect(text).toContain(`(sha ${FIXTURE_HASH})`);
@@ -106,14 +106,14 @@ describe("calibrate", () => {
     expect(await calibrate("-r", "fixture", "-s", "github:kit/kit", "--hand", hand)).toBe(1);
     expect(stdout()).toBe("");
     expect(stderr()).toContain(message);
-    expect(counts).toEqual({ github: 0, jev: 0, other: 0 });
+    expect(counts).toEqual({ github: 0, linear: 0, jev: 0, other: 0 });
   });
 
   test("a source absent from the allowlist refuses before the rubric is read, with zero requests", async () => {
     expect(await calibrate("-r", "no-such-rubric", "-s", "github:other/repo", "--hand", "#1,#2")).toBe(1);
     expect(stderr()).toContain("github:other/repo is not on the backlog source allowlist");
     expect(stderr()).not.toContain("no rubric");
-    expect(counts).toEqual({ github: 0, jev: 0, other: 0 });
+    expect(counts).toEqual({ github: 0, linear: 0, jev: 0, other: 0 });
   });
 
   test("--rubric takes a file path, resolved against the project root", async () => {

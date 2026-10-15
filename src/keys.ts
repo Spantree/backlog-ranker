@@ -5,6 +5,7 @@
  */
 export const DEFAULT_KEY_VARS = {
   github: "GITHUB_TOKEN",
+  linear: "LINEAR_API_KEY",
   typesafe: "TYPESAFE_API_KEY",
   openrouter: "OPENROUTER_API_KEY",
 } as const;

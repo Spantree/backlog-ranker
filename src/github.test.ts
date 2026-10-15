@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { isRefusal } from "./errors.js";
+import { replayFetch } from "./fixtures/replay.js";
 import { parseSource } from "./source.js";
-import { GITHUB_GRAPHQL_ENDPOINT, githubTracker, trackerFor } from "./trackers/github.js";
+import { GITHUB_GRAPHQL_ENDPOINT, githubTracker } from "./trackers/github.js";
+import { trackerFor } from "./trackers/index.js";
 
 type Body = { query: string; variables: Record<string, unknown> };
 
@@ -239,17 +241,14 @@ describe("trackerFor", () => {
     expect((await tracker.pending()).map((t) => t.key)).toEqual(["Kit/Kit#1"]);
   });
 
-  test("refuses a linear source as a planned adapter", () => {
-    let err: unknown;
-    try {
-      trackerFor(parseSource("linear:EVA"), { token: "t" });
-    } catch (e) {
-      err = e;
-    }
-    expect(isRefusal(err)).toBe(true);
-    expect((err as Error).message).toBe(
-      "linear:EVA is a Linear source, and the Linear adapter is planned but not built yet; " +
-        "backlog-ranker reads github:<owner>/<repo> sources today",
-    );
+  test("builds the Linear tracker for a linear source, with its states", async () => {
+    const net = replayFetch();
+    const tracker = trackerFor(parseSource("linear:kit"), {
+      token: "k",
+      linearStates: ["started"],
+      fetch: net.fetch,
+    });
+    expect(tracker.source).toBe("linear:KIT");
+    expect((await tracker.pending()).map((t) => t.key)).toEqual(["KIT-7", "KIT-8"]);
   });
 });

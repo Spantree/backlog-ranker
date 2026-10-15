@@ -1,8 +1,9 @@
 /**
  * The project's committed policy: `.backlog-ranker/config.yaml`. It
  * names the sources whose tickets may leave the machine (the allowlist),
- * the backend and Jev version that receive them, and the environment
- * variables that carry each key. No secret is ever written here.
+ * the backend and Jev version that receive them, the environment
+ * variables that carry each key, and which Linear workflow states count
+ * as pending. No secret is ever written here.
  *
  * A gitignored `config.local.yaml` replaces the committed file outright,
  * and the run says which file it read.
@@ -48,11 +49,24 @@ export const configSchema = z
     keys: z
       .object({
         github: envVar.default(DEFAULT_KEY_VARS.github),
+        linear: envVar.default(DEFAULT_KEY_VARS.linear),
         typesafe: envVar.default(DEFAULT_KEY_VARS.typesafe),
         openrouter: envVar.default(DEFAULT_KEY_VARS.openrouter),
       })
       .strict()
       .default(DEFAULT_KEY_VARS),
+    /** Linear sources only: which workflow states are ranked. */
+    linear: z
+      .object({
+        /** State names or types, case-insensitive; `[backlog, unstarted]`
+         * (Backlog and Todo on Linear's default workflow) when absent. */
+        states: z
+          .array(z.string().trim().min(1, "a workflow state name or type"))
+          .min(1, "list at least one workflow state name or type")
+          .optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

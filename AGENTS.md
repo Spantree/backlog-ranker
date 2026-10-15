@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`backlog-ranker` ranks a GitHub repository's open issues by a YAML rubric. A decision model (TypeSafe's Jev) answers narrow questions about one issue at a time; code does the weighting, gates, caching, tie-break and calibration. It ships as one npm package with a CLI (`rank`, `calibrate`, `explain`) and a library.
+`backlog-ranker` ranks a GitHub repository's open issues, or a Linear team's pending issues, by a YAML rubric. A decision model (TypeSafe's Jev) answers narrow questions about one issue at a time; code does the weighting, gates, caching, tie-break and calibration. It ships as one npm package with a CLI (`rank`, `calibrate`, `explain`) and a library.
 
 ## Layout
 
@@ -10,8 +10,8 @@
 - `src/source.ts`: source grammar, the one issue-key grammar, and the allowlist check. `src/errors.ts`: the refusal and help-request brands.
 - `src/rubric.ts`, `src/state.ts`, `src/score.ts`, `src/compose.ts`, `src/tiebreak.ts`, `src/kendall.ts`, `src/cache.ts`, `src/table.ts`: rubric parsing, state building, scoring, composition, tie-break, tau, the answer cache and rendering.
 - `src/engine.ts`: the engine-neutral decision interface. `src/jev/`: the Jev adapter over `@typesafe-ai/sdk` and the backend table.
-- `src/trackers/`: the `Tracker` interface and the GitHub adapter.
-- `src/fixtures/`: the fixture rubric, the GitHub issue page, recorded Jev responses (`jev/<hash16>.json`), `replay.ts` (the offline fetch the suite runs on) and `project.ts` (the CLI suites' fixture project, io capture and temp roots).
+- `src/trackers/`: the `Tracker` interface, the GitHub and Linear adapters, and `trackerFor` (`index.ts`), which picks one for a source.
+- `src/fixtures/`: the fixture rubric, the GitHub issue page, the Linear team's issues and workflow states (`linear-issues.json`, `linear-workflow-states.json`), recorded Jev responses (`jev/<hash16>.json`), `replay.ts` (the offline fetch the suite runs on) and `project.ts` (the CLI suites' fixture project, io capture and temp roots).
 - `rubrics/impact-roi.yaml`: the shipped example rubric. `skills/backlog-ranker/SKILL.md`: the shipped agent skill.
 - `scripts/capture-fixtures.ts`: re-records the Jev fixtures. `docs/`: user docs, shipped in the package (`docs/agents/` is not). `.scratch/`: local issues and specs, never shipped.
 
@@ -30,16 +30,16 @@ mise exec -- npm pack --dry-run  # check what ships
 
 ## Invariants
 
-- Read-only toward GitHub. Nothing in the package writes a label, comment, field or anything else to a tracker.
+- Read-only toward GitHub and Linear. Nothing in the package writes a label, comment, field or anything else to a tracker.
 - Allowlist first. Every verb checks the source against `sources` in the config before reading a rubric, building a tracker or engine, reading a key, or sending a request. A refused source sends nothing and writes no cache. `--allow-once` never writes config. Never add a source to an allowlist to get a test or a run through.
-- Only title, body and labels leave GitHub, plus facts computed in code. Errors name the backend or operation and the HTTP status, never a key, a token or issue text.
-- No network in tests. The suite runs on `src/fixtures/replay.ts`, which serves the recorded GitHub page and Jev responses and counts requests per destination.
+- Only title, body and labels leave the tracker, plus facts computed in code. Errors name the backend or operation and the HTTP status, never a key, a token or issue text.
+- No network in tests. The suite runs on `src/fixtures/replay.ts`, which serves the recorded GitHub page, the Linear team and the Jev responses and counts requests per destination (`github`, `linear`, `jev`, `other`).
 - Recorded fixtures replay by state hash. A Jev recording is found by the first 16 hex digits of the SHA-256 of the state sent; a state with no recording answers 404, so a changed state fails loudly instead of replaying a stale answer. The state hash excludes the issue key.
 - The model version is pinned; answers from any other served version are refused.
 
 ## Re-recording fixtures
 
-Re-record after changing `src/fixtures/rubric.yaml`, `src/fixtures/github-issues.json`, or anything that changes the state sent (its fields, the age buckets, the prompt budget):
+The Linear team's Backlog and Todo issues carry the same tickets as the GitHub page (`src/github-fixture.test.ts` checks it), so both replay the same recordings: change them together. Re-record after changing `src/fixtures/rubric.yaml`, `src/fixtures/github-issues.json`, or anything that changes the state sent (its fields, the age buckets, the prompt budget):
 
 ```bash
 OPENROUTER_API_KEY=... mise exec -- bun scripts/capture-fixtures.ts [--model jev-1.13]

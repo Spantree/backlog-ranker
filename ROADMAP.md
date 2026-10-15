@@ -2,12 +2,6 @@
 
 Deferred work, in no particular order.
 
-## Linear adapter
-
-Tracked in #1.
-
-`linear:<TEAM>` sources already parse and are accepted in `sources`, but the tracker refuses them as not built yet. The adapter would read a team's pending issues (open, not started, done or canceled) with the same ticket shape and facts as GitHub.
-
 ## Open-blocker and closing-PR facts with fact gates
 
 Tracked in #2. Triage replaced "blocked by an open parent" with open blockers from GitHub's native issue dependencies, and turned both facts into code-side gates that hold or sink a ticket.

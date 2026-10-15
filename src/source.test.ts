@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { isRefusal } from "./errors.js";
-import { assertAllowed, parseSource } from "./source.js";
+import { assertAllowed, issueKeyIn, parseIssueKey, parseSource } from "./source.js";
 
 describe("parseSource", () => {
   test.each([
@@ -67,5 +67,57 @@ describe("assertAllowed", () => {
 
   test("an empty allowlist says it lists no sources", () => {
     expect(() => assertAllowed(parseSource("linear:EVA"), [], "sources")).toThrow("it lists no sources");
+  });
+});
+
+describe("parseIssueKey", () => {
+  test("owner/repo#N yields its GitHub source", () => {
+    const parsed = parseIssueKey("kit/kit#3");
+    expect(parsed.source.spec).toBe("github:kit/kit");
+    expect(parsed.key).toBe("kit/kit#3");
+  });
+
+  test("TEAM-N yields its Linear source and the uppercased key", () => {
+    const parsed = parseIssueKey("kit-3");
+    expect(parsed.source).toEqual({ kind: "linear", team: "KIT", spec: "linear:KIT" });
+    expect(parsed.key).toBe("KIT-3");
+    expect(parsed.number).toBe(3);
+  });
+
+  test.each(["3", "#3", "KIT-0", "KIT-", "-3", "K I-3", "kit/kit#0", "TOOLONGTEAM1-3"])(
+    "%s is refused naming both key spellings",
+    (bad) => {
+      let err: unknown;
+      try {
+        parseIssueKey(bad);
+      } catch (e) {
+        err = e;
+      }
+      expect(isRefusal(err)).toBe(true);
+      expect((err as Error).message).toContain("<owner>/<repo>#<number>");
+      expect((err as Error).message).toContain("<TEAM>-<number>");
+    },
+  );
+});
+
+describe("issueKeyIn", () => {
+  const github = parseSource("github:Kit/Kit");
+  const linear = parseSource("linear:KIT");
+
+  test("spells a GitHub source's keys as the tracker does", () => {
+    expect(issueKeyIn("kit/KIT#3", github, { bare: false })).toBe("Kit/Kit#3");
+    expect(issueKeyIn("#3", github, { bare: true })).toBe("Kit/Kit#3");
+    expect(issueKeyIn("3", github, { bare: false })).toBeUndefined();
+    expect(issueKeyIn("other/repo#3", github, { bare: true })).toBeUndefined();
+    expect(issueKeyIn("KIT-3", github, { bare: true })).toBeUndefined();
+  });
+
+  test("spells a Linear source's keys as TEAM-N, expanding bare numbers to its team", () => {
+    expect(issueKeyIn("kit-3", linear, { bare: false })).toBe("KIT-3");
+    expect(issueKeyIn("3", linear, { bare: true })).toBe("KIT-3");
+    expect(issueKeyIn("#3", linear, { bare: true })).toBe("KIT-3");
+    expect(issueKeyIn("3", linear, { bare: false })).toBeUndefined();
+    expect(issueKeyIn("EVA-3", linear, { bare: true })).toBeUndefined();
+    expect(issueKeyIn("kit/kit#3", linear, { bare: true })).toBeUndefined();
   });
 });

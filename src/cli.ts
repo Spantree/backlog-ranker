@@ -83,8 +83,7 @@ interface Prepared {
  * allowlist, read the rubric, build the tracker then the engine, open the
  * cache. The allowlist is checked before the rubric is read, the tracker
  * is built, or anything leaves the machine; the tracker comes before the
- * engine so an unsupported source says so instead of reporting a missing
- * engine key.
+ * engine so a missing tracker key is reported before a missing engine key.
  */
 async function prepare(
   deps: VerbDeps,
@@ -95,8 +94,9 @@ async function prepare(
   const project = await deps.resolve(deps.cwd(), io.env, run.load ?? {});
   assertAllowed(source, project.sources, project.allowlistKey);
   if (run.load?.allowOnce !== undefined) {
+    const issues = source.kind === "github" ? "open issues" : "pending issues";
     io.stderr(
-      `the titles, bodies and labels of open issues in ${source.spec} will be sent to ` +
+      `the titles, bodies and labels of ${issues} in ${source.spec} will be sent to ` +
         `${project.backend} for this run only; nothing is saved to config\n`,
     );
   }
@@ -216,7 +216,7 @@ function explainVerb(deps: VerbDeps): VerbHandler {
     const rubric = flags.required("rubric");
     const [keyArg, ...extra] = flags.positionals;
     if (keyArg === undefined || extra.length > 0) {
-      throw flags.error("explain takes exactly one issue key, such as octocat/hello-world#1");
+      throw flags.error("explain takes exactly one issue key, such as octocat/hello-world#1 or ENG-12");
     }
     const { source, key } = parseIssueKey(keyArg);
     const p = await prepare(deps, io, { source, rubric });

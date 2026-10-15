@@ -48,7 +48,7 @@ describe("rank", () => {
   test("prints a ranked table from recorded fixtures, with no live network", async () => {
     expect(await rank("--rubric", "fixture", "--source", "github:kit/kit")).toBe(0);
     expect(stderr()).toBe("");
-    expect(counts).toEqual({ github: 1, jev: 6, other: 0 });
+    expect(counts).toEqual({ github: 1, linear: 0, jev: 6, other: 0 });
     const table = stdout();
     const lines = table.split("\n");
     const row = (key: string): string => lines.find((l) => l.includes(` ${key} `)) ?? "";
@@ -91,7 +91,7 @@ describe("rank", () => {
     expect(stderr()).toContain("github:other/repo is not on the backlog source allowlist");
     expect(stderr()).toContain("sources in .backlog-ranker/config.yaml");
     expect(stderr()).toContain("No request was sent");
-    expect(counts).toEqual({ github: 0, jev: 0, other: 0 });
+    expect(counts).toEqual({ github: 0, linear: 0, jev: 0, other: 0 });
     expect(existsSync(join(root, CACHE_DIR))).toBe(false);
   });
 
@@ -150,7 +150,7 @@ describe("rank", () => {
       .map((l) => l.split(/\s+/)[1]);
     // The pin holds; the recorded pairwise answers put the crash above the typo.
     expect(order).toEqual(["kit/kit#1", "kit/kit#3", "kit/kit#2", "kit/kit#6"]);
-    expect(counts).toEqual({ github: 1, jev: 9, other: 0 });
+    expect(counts).toEqual({ github: 1, linear: 0, jev: 9, other: 0 });
   });
 
   test("--concurrency bounds requests and still ranks", async () => {
@@ -175,7 +175,7 @@ describe("rank", () => {
     expect(stderr()).not.toMatch(/^\w*Error: /);
     expect(stderr()).not.toMatch(/^\s+at /m);
     expect(stderr()).toContain(message);
-    expect(counts).toEqual({ github: 0, jev: 0, other: 0 });
+    expect(counts).toEqual({ github: 0, linear: 0, jev: 0, other: 0 });
   });
 
   test("a relative rubric path resolves against the project root, not the working directory", async () => {
@@ -195,6 +195,6 @@ describe("rank", () => {
     expect(await rank("--help")).toBe(0);
     expect(stdout()).toContain("backlog-ranker rank");
     expect(stderr()).toBe("");
-    expect(counts).toEqual({ github: 0, jev: 0, other: 0 });
+    expect(counts).toEqual({ github: 0, linear: 0, jev: 0, other: 0 });
   });
 });

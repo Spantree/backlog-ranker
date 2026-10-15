@@ -21,8 +21,10 @@ import { RefusalError } from "./errors.js";
 import type { BackendName } from "./jev/backends.js";
 import { createJevEngine } from "./jev/index.js";
 import { assertAllowed, type SourceRef } from "./source.js";
-import { type FetchFn, plannedAdapter, tokenHint, trackerFor } from "./trackers/github.js";
-import type { Tracker } from "./trackers/tracker.js";
+import { tokenHint } from "./trackers/github.js";
+import { trackerFor } from "./trackers/index.js";
+import { linearKeyHint } from "./trackers/linear.js";
+import type { FetchFn, Tracker } from "./trackers/tracker.js";
 
 /** Where the allowlist lives, named in the refusal. */
 export const ALLOWLIST_KEY = "sources in .backlog-ranker/config.yaml";
@@ -40,7 +42,7 @@ export interface Project {
   /** Built on first call; refuses when the backend's key variable is unset. */
   engine(): DecisionEngine;
   /** Refuses a source off the allowlist (the `allowOnce` one is on it),
-   * then a planned adapter, then an unset GitHub token variable. */
+   * then an unset key variable for the source's tracker (GitHub or Linear). */
   tracker(source: SourceRef): Tracker;
 }
 
@@ -137,11 +139,19 @@ export function loadProject(
       // Defence for library callers: the CLI checks first, so its refusal
       // precedes the rubric read; nothing is built for an unlisted source.
       assertAllowed(source, sources, ALLOWLIST_KEY);
-      if (source.kind === "linear") throw plannedAdapter(source);
-      const tokenEnvVar = config.keys.github;
+      const tokenEnvVar = config.keys[source.kind];
       const token = env[tokenEnvVar];
-      if (!present(token)) throw new LoaderError(`${tokenEnvVar} is not set. ${tokenHint(tokenEnvVar)}`);
-      return trackerFor(source, { token, tokenEnvVar, ...fetchOpt });
+      if (!present(token)) {
+        const hint = source.kind === "linear" ? linearKeyHint(tokenEnvVar) : tokenHint(tokenEnvVar);
+        throw new LoaderError(`${tokenEnvVar} is not set. ${hint}`);
+      }
+      const states = config.linear?.states;
+      return trackerFor(source, {
+        token,
+        tokenEnvVar,
+        ...fetchOpt,
+        ...(states === undefined ? {} : { linearStates: states }),
+      });
     },
   };
 }

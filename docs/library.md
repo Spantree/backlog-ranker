@@ -30,11 +30,11 @@ console.log("held:", result.ranking.held.map((row) => row.key));
 console.log(result.stats.requests, "requests,", result.stats.cachedAnswers, "answers from cache");
 ```
 
-`Project` carries `projectRoot`, `configPath`, `config`, `sources`, `allowlistKey`, `backend`, `engine()` and `tracker(source)`. `engine()` refuses when the backend's key variable is unset. `tracker()` refuses, in order, a source not on the allowlist (with the same wording as `assertAllowed`), a `linear:` source as not built yet, and an unset GitHub token variable. `LoadOptions` takes `allowOnce` (a `SourceRef` admitted for this project object only), `backend` and `fetch` (a replacement for the global fetch, used by tests).
+`Project` carries `projectRoot`, `configPath`, `config`, `sources`, `allowlistKey`, `backend`, `engine()` and `tracker(source)`. `engine()` refuses when the backend's key variable is unset. `tracker()` refuses, in order, a source not on the allowlist (with the same wording as `assertAllowed`) and an unset key variable for the source's tracker (`keys.github` for a `github:` source, `keys.linear` for a `linear:` one); a Linear tracker gets the config's `linear.states`. `LoadOptions` takes `allowOnce` (a `SourceRef` admitted for this project object only), `backend` and `fetch` (a replacement for the global fetch, used by tests).
 
 ## Building the pieces yourself
 
-`createJevEngine` and `githubTracker` take their keys directly. This path has no config file and so no allowlist: deciding which repositories may be sent to the provider is up to your code.
+`createJevEngine`, `githubTracker` and `linearTracker` take their keys directly. This path has no config file and so no allowlist: deciding which repositories or teams may be sent to the provider is up to your code.
 
 ```ts
 import { createJevEngine, githubTracker, openCache, rankBacklog } from "backlog-ranker";
@@ -59,7 +59,17 @@ console.log(ranking.ranked.map((row) => row.key));
 
 `createJevEngine(options)`: `backend` (`"typesafe"` or `"openrouter"`), `apiKey`, and optionally `apiKeyVar` (the variable named when the backend refuses the key, default the backend's entry in `DEFAULT_KEY_VARS`), `model` (default `jev-1.14`; an unknown version refuses), `fetch`, `retry` (the SDK's retry policy, partially overridden; by default 408, 429 and 5xx are retried twice with backoff) and `timeoutMs` (per attempt, default 60000).
 
-`githubTracker(options)`: `owner`, `repo`, `token`, and optionally `fetch` and `tokenEnvVar` (named in auth refusals, default `GITHUB_TOKEN`). `trackerFor(source, options)` builds the tracker for a parsed `SourceRef`.
+`githubTracker(options)`: `owner`, `repo`, `token`, and optionally `fetch` and `tokenEnvVar` (named in auth refusals, default `GITHUB_TOKEN`).
+
+`linearTracker(options)`: `team` (the team key, as in `ENG-123`), `apiKey` (a personal API key, sent without a `Bearer` prefix), and optionally `apiKeyVar` (named in auth refusals, default `LINEAR_API_KEY`), `states` (workflow state names or types to rank, case-insensitive; default `DEFAULT_LINEAR_STATES`, `["backlog", "unstarted"]`), `fetch` and `timeoutMs` (per request, default 30000). `pending()` reads the team's workflow states, refuses a `states` entry that matches none of them (listing the team's states) or an empty list, then pages through the issues in the matched states. `issues(keys)` takes `TEAM-123` keys of its own team, in any state, and refuses another team's keys before any request. Every reply is checked against a schema; one of an unexpected shape refuses naming the field path. Failures are `LinearTrackerError`s.
+
+```ts
+import { linearTracker } from "backlog-ranker";
+
+const tracker = linearTracker({ team: "ENG", apiKey: process.env.LINEAR_API_KEY ?? "", states: ["Todo"] });
+```
+
+`trackerFor(source, options)` builds the tracker for a parsed `SourceRef`: `token` (the GitHub token or Linear API key), and optionally `tokenEnvVar`, `linearStates` and `fetch`.
 
 `openCache(projectRoot, engineId, model, now?)` opens `<projectRoot>/.backlog-ranker/cache/<engine>--<model>.json`. The facades flush it before they return or throw.
 
@@ -69,7 +79,7 @@ Takes `rubric` (a parsed `Rubric` or a YAML file path), exactly one of `tickets`
 
 ## calibrateBacklog
 
-Takes the same options as `rankBacklog` without `tiebreak`, plus `hand`: issue keys best first, exactly as the tracker spells them (`acme/app#12`). With a tracker it reads only those issues.
+Takes the same options as `rankBacklog` without `tiebreak`, plus `hand`: issue keys best first, exactly as the tracker spells them (`acme/app#12`, `ENG-12`). With a tracker it reads only those issues.
 
 ```ts
 import { calibrateBacklog, type DecisionEngine, type AnswerCache, type Tracker } from "backlog-ranker";
@@ -193,7 +203,7 @@ export const middleEngine: DecisionEngine = {
 
 ## Errors and guards
 
-Every error the tool expects you to fix is a `RefusalError`: a usage or config problem, an unlisted source, an unset key, a failed request. Subclasses name the area: `ConfigError`, `LoaderError`, `RubricError`, `SourceError`, `GitHubTrackerError`, `JevError` (with the HTTP `status` when there was one) and `PromptBudgetError`. Their messages never contain a key, a token or issue text.
+Every error the tool expects you to fix is a `RefusalError`: a usage or config problem, an unlisted source, an unset key, a failed request. Subclasses name the area: `ConfigError`, `LoaderError`, `RubricError`, `SourceError`, `GitHubTrackerError`, `LinearTrackerError`, `JevError` (with the HTTP `status` when there was one) and `PromptBudgetError`. Their messages never contain a key, a token or issue text.
 
 Use `isRefusal(err)` rather than `instanceof`: it checks a registry symbol, so it recognises refusals from another copy of the package (a symlinked or duplicated install). `isHelpRequest(err)` does the same for the `HelpRequest` a `--help` throws.
 
@@ -214,4 +224,4 @@ try {
 
 ## Building blocks
 
-Also exported: `parseRubric`, `loadRubric`, `loadRubricFile`, `withWeights`, `rubricHash`; `scoreTickets`, `pool`; `rank`, `compositeOf`, `rubricQuestions`; `tiebreak`, `MAX_TIEBREAK`; `kendallTau`; `toState`, `stateHash`, `canonicalJson` and the prompt budget helpers; `parseSource`, `parseIssueKey`, `assertAllowed`; `loadConfig`, `parseConfig`, `configSchema`, `findProjectRoot`; `BACKENDS`, `JEV_MODELS`, `DEFAULT_JEV_MODEL`; `renderTable`, `renderExplain`.
+Also exported: `parseRubric`, `loadRubric`, `loadRubricFile`, `withWeights`, `rubricHash`; `scoreTickets`, `pool`; `rank`, `compositeOf`, `rubricQuestions`; `tiebreak`, `MAX_TIEBREAK`; `kendallTau`; `toState`, `stateHash`, `canonicalJson` and the prompt budget helpers; `parseSource`, `parseIssueKey` (`owner/repo#123` or `TEAM-123`), `issueKeyIn`, `assertAllowed`; `loadConfig`, `parseConfig`, `configSchema`, `findProjectRoot`; `BACKENDS`, `JEV_MODELS`, `DEFAULT_JEV_MODEL`; `renderTable`, `renderExplain`.

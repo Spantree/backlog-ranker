@@ -1,6 +1,7 @@
 /**
  * The offline network the suite runs against: one fetch that serves the
- * recorded GitHub issue page and the recorded Jev responses, and counts
+ * recorded GitHub issue page, the Linear team's issues and workflow
+ * states, and the recorded Jev responses, and counts
  * every request by destination, so a test can assert that a refusal sent
  * nothing at all. Jev recordings are keyed by the first 16 hex digits of
  * the state hash; a state with no recording answers 404, so a changed
@@ -13,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { BACKENDS } from "../jev/backends.js";
 import { stateHash } from "../state.js";
 import { GITHUB_GRAPHQL_ENDPOINT } from "../trackers/github.js";
+import { LINEAR_GRAPHQL_ENDPOINT } from "../trackers/linear.js";
 
 export const FIXTURE_DIR = fileURLToPath(new URL(".", import.meta.url));
 /** The clock the fixture states were captured under (their age facts). */
@@ -25,6 +27,7 @@ export function jevFixtureName(state: unknown): string {
 
 export interface RequestCounts {
   github: number;
+  linear: number;
   jev: number;
   other: number;
 }
@@ -34,6 +37,50 @@ export type ReplayFetch = typeof globalThis.fetch;
 
 interface IssueNode {
   number: number;
+}
+
+/** The Linear team every fixture issue belongs to. */
+export const FIXTURE_LINEAR_TEAM = "KIT";
+
+interface LinearNode {
+  identifier: string;
+  state: { id: string };
+}
+
+interface LinearVariables {
+  id?: string;
+  team?: string;
+  states?: string[];
+}
+
+/** Serves Linear the way its API answers the tracker's three queries:
+ * a team's workflow states, a page of issues in the named states, and
+ * one issue by identifier in any state. */
+function linearReply(query: string, variables: LinearVariables): Response {
+  const nodes = (
+    JSON.parse(readFileSync(join(FIXTURE_DIR, "linear-issues.json"), "utf8")) as {
+      data: { issues: { nodes: LinearNode[] } };
+    }
+  ).data.issues.nodes;
+  if (variables.id !== undefined) {
+    const issue = nodes.find((n) => n.identifier === variables.id);
+    if (issue !== undefined) return json({ data: { issue } });
+    return json({ data: null, errors: [{ message: "Entity not found: Issue" }] });
+  }
+  const ours = variables.team === FIXTURE_LINEAR_TEAM;
+  if (query.includes("workflowStates")) {
+    if (ours) return json(readFileSync(join(FIXTURE_DIR, "linear-workflow-states.json"), "utf8"));
+    return json({ data: { workflowStates: { nodes: [] } } });
+  }
+  const wanted = new Set(variables.states ?? []);
+  return json({
+    data: {
+      issues: {
+        pageInfo: { hasNextPage: false, endCursor: null },
+        nodes: ours ? nodes.filter((n) => wanted.has(n.state.id)) : [],
+      },
+    },
+  });
 }
 
 const JEV_URLS = new Set(Object.values(BACKENDS).map((b) => `${b.baseURL}/v1/systemone`));
@@ -59,7 +106,7 @@ export interface ReplayOptions {
 }
 
 export function replayFetch(options: ReplayOptions = {}): { fetch: ReplayFetch; counts: RequestCounts } {
-  const counts: RequestCounts = { github: 0, jev: 0, other: 0 };
+  const counts: RequestCounts = { github: 0, linear: 0, jev: 0, other: 0 };
   const page = readFileSync(join(FIXTURE_DIR, "github-issues.json"), "utf8");
   const nodes = (JSON.parse(page) as { data: { repository: { issues: { nodes: IssueNode[] } } } }).data
     .repository.issues.nodes;
@@ -77,6 +124,11 @@ export function replayFetch(options: ReplayOptions = {}): { fetch: ReplayFetch; 
           data: { repository: { issue: null } },
           errors: [{ type: "NOT_FOUND", path: ["repository", "issue"], message: "not found" }],
         });
+      }
+      if (url === LINEAR_GRAPHQL_ENDPOINT) {
+        counts.linear++;
+        const { query, variables } = (await bodyOf(init)) as { query: string; variables: LinearVariables };
+        return linearReply(query, variables);
       }
       if (JEV_URLS.has(url)) {
         counts.jev++;
