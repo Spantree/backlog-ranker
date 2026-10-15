@@ -1,0 +1,57 @@
+{
+  "model": "typesafe/jev-1.14-20261014",
+  "answers": {
+    "impact": {
+      "type": "score",
+      "score": 0.08,
+      "legend": {
+        "0": "Cosmetic: wording or a nicety nobody is slowed by",
+        "1": "Removes minor friction in a rarely used command",
+        "2": "Removes recurring friction in a workflow used on most goals",
+        "3": "Fixes a failure that blocks a workflow used on most goals",
+        "4": "Prevents a leaked secret, lost work, or silently wrong results"
+      },
+      "probabilities": {
+        "0": 0.96,
+        "1": 0.02,
+        "2": 0.01,
+        "3": 0.01,
+        "4": 0
+      },
+      "confidence": 0.94
+    },
+    "effort": {
+      "type": "score",
+      "score": 0.4,
+      "legend": {
+        "0": "A documentation edit or a one-line change",
+        "1": "A small change inside one module, with a test",
+        "2": "Changes across several modules of one package",
+        "3": "A new command or a change spanning several packages",
+        "4": "A new subsystem that needs its own design decisions"
+      },
+      "probabilities": {
+        "0": 0.85,
+        "1": 0.04,
+        "2": 0.04,
+        "3": 0.02,
+        "4": 0.05
+      },
+      "confidence": 0.68
+    },
+    "security": {
+      "type": "noul",
+      "noul": 0.04
+    },
+    "judgeable": {
+      "type": "noul",
+      "noul": 0.02
+    }
+  },
+  "usage": {
+    "input_tokens": 594,
+    "output_tokens": 65,
+    "cost": 0.000024948
+  },
+  "provider": "TypeSafe"
+}

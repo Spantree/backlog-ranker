@@ -1,0 +1,29 @@
+{
+  "model": "typesafe/jev-1.14-20261014",
+  "answers": {
+    "first_listed_first": {
+      "type": "choice",
+      "choice": "first",
+      "probabilities": {
+        "first": 0.69,
+        "second": 0.31
+      },
+      "confidence": 0.38
+    },
+    "second_listed_first": {
+      "type": "choice",
+      "choice": "first",
+      "probabilities": {
+        "second": 0.17,
+        "first": 0.83
+      },
+      "confidence": 0.66
+    }
+  },
+  "usage": {
+    "input_tokens": 630,
+    "output_tokens": 65,
+    "cost": 0.00002646
+  },
+  "provider": "TypeSafe"
+}
