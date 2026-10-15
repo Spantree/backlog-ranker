@@ -41,6 +41,15 @@ describe("loadProject", () => {
     expect(err.message).toContain("backend: typesafe");
   });
 
+  test("a project with only the directory from before the rename has no config", () => {
+    mkdirSync(join(root, ".git"));
+    const old = join(root, `.${["backlog", "decisions"].join("-")}`);
+    mkdirSync(old);
+    writeFileSync(join(old, "config.yaml"), "sources:\n  - github:kit/kit\nbackend: typesafe\n");
+    const err = refusal(() => loadProject(root, {}));
+    expect(err.message).toContain(join(root, ".backlog-ranker", "config.yaml"));
+  });
+
   test("reads the committed config and defaults the key variables", () => {
     writeConfig("config.yaml", "sources:\n  - github:kit/kit\nbackend: typesafe\nmodel: jev-1.13\n");
     const project = loadProject(root, {});
