@@ -8,9 +8,9 @@ Tracked in #1.
 
 `linear:<TEAM>` sources already parse and are accepted in `sources`, but the tracker refuses them as not built yet. The adapter would read a team's pending issues (open, not started, done or canceled) with the same ticket shape and facts as GitHub.
 
-## GitHub facts for linked pull requests and blocked-by-open-parent
+## Open-blocker and closing-PR facts with fact gates
 
-Tracked in #2.
+Tracked in #2. Triage replaced "blocked by an open parent" with open blockers from GitHub's native issue dependencies, and turned both facts into code-side gates that hold or sink a ticket.
 
 Two more facts computed in code: how many open pull requests reference the issue, and whether the issue is blocked by an open parent. Both change the state sent to the model, so every state hash changes: existing cache entries stop matching, and the recorded Jev fixtures must be re-recorded with `scripts/capture-fixtures.ts`.
 
