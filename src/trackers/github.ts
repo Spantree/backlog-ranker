@@ -48,20 +48,45 @@ export interface GitHubTrackerOptions {
  * dependency summary; closing pull requests are filtered to open ones in
  * code, since closing references can be MERGED. Drafts are OPEN, so they
  * count. */
-const ISSUE_FIELDS = `id number title body url createdAt
-  labels(first: 100) { nodes { name } }
-  reactions { totalCount }
-  assignees { totalCount }
-  timelineItems(itemTypes: [CROSS_REFERENCED_EVENT, CONNECTED_EVENT, MARKED_AS_DUPLICATE_EVENT], first: 100) {
-    nodes {
+const NESTED = {
+  labels: { args: "", first: 100, nodes: "nodes { name }" },
+  timelineItems: {
+    args: "itemTypes: [CROSS_REFERENCED_EVENT, CONNECTED_EVENT, MARKED_AS_DUPLICATE_EVENT]",
+    first: 50,
+    nodes: `nodes {
       __typename
       ... on CrossReferencedEvent { resourcePath }
       ... on ConnectedEvent { source { __typename ... on Node { id } } subject { __typename ... on Node { id } } }
-    }
-  }
+    }`,
+  },
+  closedByPullRequestsReferences: { args: "includeClosedPrs: false", first: 10, nodes: "nodes { state }" },
+} as const;
+type NestedName = keyof typeof NESTED;
+const NESTED_NAMES = Object.keys(NESTED) as NestedName[];
+/** The rest of a nested connection is read 100 at a time. */
+const REST_SIZE = 100;
+
+/** A nested connection with its page info, so a count never stops at the
+ * first page. */
+function nested(name: NestedName, first: number, after = false): string {
+  const { args, nodes } = NESTED[name];
+  const all = [`first: ${first}`, args, after ? "after: $after" : ""].filter((a) => a !== "").join(", ");
+  return `${name}(${all}) { pageInfo { hasNextPage endCursor } ${nodes} }`;
+}
+
+const ISSUE_FIELDS = `id number title body url createdAt
+  reactions { totalCount }
+  assignees { totalCount }
   subIssues { totalCount }
   issueDependenciesSummary { blockedBy }
-  closedByPullRequestsReferences(first: 10, includeClosedPrs: false) { nodes { state } }`;
+  ${NESTED_NAMES.map((name) => nested(name, NESTED[name].first)).join("\n  ")}`;
+
+const REST_QUERIES = Object.fromEntries(
+  NESTED_NAMES.map((name) => [
+    name,
+    `query($id: ID!, $after: String) { node(id: $id) { ... on Issue { ${nested(name, REST_SIZE, true)} } } }`,
+  ]),
+) as Record<NestedName, string>;
 
 const PENDING_QUERY = `query($owner: String!, $name: String!, $first: Int!, $after: String) {
   repository(owner: $owner, name: $name) {
@@ -89,6 +114,16 @@ interface TimelineNode {
   subject?: Subject | null;
 }
 
+interface PageInfo {
+  hasNextPage: boolean;
+  endCursor: string | null;
+}
+
+interface Connection<N> {
+  pageInfo?: PageInfo;
+  nodes: (N | null)[];
+}
+
 interface IssueNode {
   id: string;
   number: number;
@@ -96,14 +131,16 @@ interface IssueNode {
   body: string | null;
   url: string;
   createdAt: string;
-  labels: { nodes: { name: string }[] };
+  labels: Connection<{ name: string }>;
   reactions: { totalCount: number };
   assignees: { totalCount: number };
-  timelineItems: { nodes: (TimelineNode | null)[] };
+  timelineItems: Connection<TimelineNode>;
   subIssues: { totalCount: number };
   issueDependenciesSummary: { blockedBy: number };
-  closedByPullRequestsReferences: { nodes: ({ state: string } | null)[] };
+  closedByPullRequestsReferences: Connection<{ state: string }>;
 }
+
+type RestReply = { node: Partial<Record<NestedName, Connection<unknown>>> | null };
 
 interface IssueLookup {
   repository: { issue: IssueNode | null } | null;
@@ -260,7 +297,7 @@ function toTicket(owner: string, repo: string, node: IssueNode): Ticket {
     key: `${owner}/${repo}#${node.number}`,
     title: node.title,
     body: node.body ?? "",
-    labels: node.labels.nodes.map((l) => l.name),
+    labels: node.labels.nodes.flatMap((l) => (l === null ? [] : [l.name])),
     url: node.url,
     createdAt: node.createdAt,
     reactions: node.reactions.totalCount,
@@ -309,6 +346,27 @@ export function githubTracker(opts: GitHubTrackerOptions): Tracker {
     }
   }
 
+  /** Reads the rest of every nested connection the first page cut short,
+   * so no count stops at a page boundary. */
+  async function complete(node: IssueNode): Promise<IssueNode> {
+    for (const name of NESTED_NAMES) {
+      const connection = node[name] as Connection<unknown>;
+      let info = connection.pageInfo;
+      while (info?.hasNextPage && info.endCursor !== null) {
+        const data: RestReply = await call<RestReply>(
+          `reading ${owner}/${repo}#${node.number}'s ${name}`,
+          REST_QUERIES[name],
+          { id: node.id, after: info.endCursor },
+        );
+        const rest = data.node?.[name];
+        if (rest === undefined) break;
+        connection.nodes.push(...rest.nodes);
+        info = rest.pageInfo;
+      }
+    }
+    return node;
+  }
+
   return {
     source: `github:${owner}/${repo}`.toLowerCase(),
     async pending() {
@@ -330,7 +388,7 @@ export function githubTracker(opts: GitHubTrackerOptions): Tracker {
           continue;
         }
         const { nodes, pageInfo } = page.repository.issues;
-        tickets.push(...nodes.map((n) => toTicket(owner, repo, n)));
+        for (const n of nodes) tickets.push(toTicket(owner, repo, await complete(n)));
         if (!pageInfo.hasNextPage || pageInfo.endCursor === null) break;
         after = pageInfo.endCursor;
       }
@@ -360,7 +418,7 @@ export function githubTracker(opts: GitHubTrackerOptions): Tracker {
           notFound,
         );
         if (data.repository?.issue == null) throw new GitHubTrackerError(`GitHub has no issue ${key}`);
-        tickets.push(toTicket(owner, repo, data.repository.issue));
+        tickets.push(toTicket(owner, repo, await complete(data.repository.issue)));
       }
       return tickets;
     },

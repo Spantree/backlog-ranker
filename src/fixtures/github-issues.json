@@ -15,6 +15,10 @@
             "url": "https://github.com/kit/kit/issues/1",
             "createdAt": "2026-09-01T12:00:00.000Z",
             "labels": {
+              "pageInfo": {
+                "hasNextPage": false,
+                "endCursor": null
+              },
               "nodes": [
                 {
                   "name": "Bug"
@@ -31,6 +35,10 @@
               "totalCount": 0
             },
             "timelineItems": {
+              "pageInfo": {
+                "hasNextPage": false,
+                "endCursor": null
+              },
               "nodes": [
                 {
                   "__typename": "CrossReferencedEvent",
@@ -49,6 +57,10 @@
               "blockedBy": 1
             },
             "closedByPullRequestsReferences": {
+              "pageInfo": {
+                "hasNextPage": false,
+                "endCursor": null
+              },
               "nodes": [
                 {
                   "state": "OPEN"
@@ -64,6 +76,10 @@
             "url": "https://github.com/kit/kit/issues/2",
             "createdAt": "2026-10-10T12:00:00.000Z",
             "labels": {
+              "pageInfo": {
+                "hasNextPage": false,
+                "endCursor": null
+              },
               "nodes": [
                 {
                   "name": "Docs"
@@ -77,6 +93,10 @@
               "totalCount": 1
             },
             "timelineItems": {
+              "pageInfo": {
+                "hasNextPage": false,
+                "endCursor": null
+              },
               "nodes": [
                 {
                   "__typename": "CrossReferencedEvent",
@@ -91,6 +111,10 @@
               "blockedBy": 0
             },
             "closedByPullRequestsReferences": {
+              "pageInfo": {
+                "hasNextPage": false,
+                "endCursor": null
+              },
               "nodes": []
             }
           },
@@ -102,6 +126,10 @@
             "url": "https://github.com/kit/kit/issues/3",
             "createdAt": "2026-09-20T12:00:00.000Z",
             "labels": {
+              "pageInfo": {
+                "hasNextPage": false,
+                "endCursor": null
+              },
               "nodes": [
                 {
                   "name": "Bug"
@@ -115,6 +143,10 @@
               "totalCount": 0
             },
             "timelineItems": {
+              "pageInfo": {
+                "hasNextPage": false,
+                "endCursor": null
+              },
               "nodes": [
                 {
                   "__typename": "CrossReferencedEvent",
@@ -132,6 +164,10 @@
               "blockedBy": 1
             },
             "closedByPullRequestsReferences": {
+              "pageInfo": {
+                "hasNextPage": false,
+                "endCursor": null
+              },
               "nodes": []
             }
           },
@@ -143,6 +179,10 @@
             "url": "https://github.com/kit/kit/issues/4",
             "createdAt": "2026-08-15T12:00:00.000Z",
             "labels": {
+              "pageInfo": {
+                "hasNextPage": false,
+                "endCursor": null
+              },
               "nodes": [
                 {
                   "name": "Feature"
@@ -156,6 +196,10 @@
               "totalCount": 0
             },
             "timelineItems": {
+              "pageInfo": {
+                "hasNextPage": false,
+                "endCursor": null
+              },
               "nodes": []
             },
             "subIssues": {
@@ -165,6 +209,10 @@
               "blockedBy": 0
             },
             "closedByPullRequestsReferences": {
+              "pageInfo": {
+                "hasNextPage": false,
+                "endCursor": null
+              },
               "nodes": []
             }
           },
@@ -176,6 +224,10 @@
             "url": "https://github.com/kit/kit/issues/5",
             "createdAt": "2026-10-01T12:00:00.000Z",
             "labels": {
+              "pageInfo": {
+                "hasNextPage": false,
+                "endCursor": null
+              },
               "nodes": []
             },
             "reactions": {
@@ -185,6 +237,10 @@
               "totalCount": 0
             },
             "timelineItems": {
+              "pageInfo": {
+                "hasNextPage": false,
+                "endCursor": null
+              },
               "nodes": []
             },
             "subIssues": {
@@ -194,6 +250,10 @@
               "blockedBy": 0
             },
             "closedByPullRequestsReferences": {
+              "pageInfo": {
+                "hasNextPage": false,
+                "endCursor": null
+              },
               "nodes": []
             }
           },
@@ -205,6 +265,10 @@
             "url": "https://github.com/kit/kit/issues/6",
             "createdAt": "2026-10-05T12:00:00.000Z",
             "labels": {
+              "pageInfo": {
+                "hasNextPage": false,
+                "endCursor": null
+              },
               "nodes": [
                 {
                   "name": "Feature"
@@ -218,6 +282,10 @@
               "totalCount": 2
             },
             "timelineItems": {
+              "pageInfo": {
+                "hasNextPage": false,
+                "endCursor": null
+              },
               "nodes": []
             },
             "subIssues": {
@@ -227,6 +295,10 @@
               "blockedBy": 0
             },
             "closedByPullRequestsReferences": {
+              "pageInfo": {
+                "hasNextPage": false,
+                "endCursor": null
+              },
               "nodes": [
                 {
                   "state": "OPEN"

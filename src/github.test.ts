@@ -307,6 +307,70 @@ describe("githubTracker on busy repositories", () => {
   });
 });
 
+describe("githubTracker nested counts", () => {
+  const more = (endCursor: string) => ({ hasNextPage: true, endCursor });
+  const last = { hasNextPage: false, endCursor: null };
+  const crossRefs = (n: number) => Array.from({ length: n }, () => crossRef("issue"));
+
+  /** The page, then the rest of each nested connection, by issue id and cursor. */
+  function paged(node: Record<string, unknown>, rest: Record<string, Record<string, unknown>>) {
+    return fakeGitHub((body) => {
+      if (body.variables.id === undefined) {
+        return Response.json({ data: { repository: { issues: { pageInfo: last, nodes: [node] } } } });
+      }
+      const key = `${String(body.variables.id)}@${String(body.variables.after)}`;
+      return Response.json({ data: { node: rest[key] } });
+    });
+  }
+
+  test("linked issues past the first timeline page are read and counted", async () => {
+    const node = issue(8, {
+      subIssues: { totalCount: 0 },
+      timelineItems: { pageInfo: more("t1"), nodes: crossRefs(50) },
+    });
+    const gh = paged(node, {
+      "I_8@t1": { timelineItems: { pageInfo: more("t2"), nodes: crossRefs(100) } },
+      "I_8@t2": { timelineItems: { pageInfo: last, nodes: [...crossRefs(30), crossRef("pullrequest")] } },
+    });
+    const [t] = await githubTracker({ owner: "o", repo: "r", token: "t", fetch: gh.fetch }).pending();
+    expect(t?.linkedIssues).toBe(180);
+    expect(gh.bodies).toHaveLength(3);
+    const rest = gh.bodies[1]?.query.replace(/\s+/g, " ") ?? "";
+    expect(rest).toContain("node(id: $id) { ... on Issue { timelineItems(");
+    expect(rest).toContain("first: 100");
+    expect(rest).toContain("after: $after");
+  });
+
+  test("open closing pull requests and labels past their first page are read too", async () => {
+    const node = issue(9, {
+      labels: { pageInfo: more("l1"), nodes: [{ name: "a" }] },
+      closedByPullRequestsReferences: { pageInfo: more("p1"), nodes: [{ state: "OPEN" }] },
+    });
+    const gh = paged(node, {
+      "I_9@l1": { labels: { pageInfo: last, nodes: [{ name: "b" }] } },
+      "I_9@p1": {
+        closedByPullRequestsReferences: { pageInfo: last, nodes: [{ state: "OPEN" }, { state: "MERGED" }] },
+      },
+    });
+    const [t] = await githubTracker({ owner: "o", repo: "r", token: "t", fetch: gh.fetch }).pending();
+    expect(t).toMatchObject({ labels: ["a", "b"], openClosingPrs: 2 });
+  });
+
+  test("a named issue's nested connections are paged the same way", async () => {
+    const node = issue(4, {
+      subIssues: { totalCount: 0 },
+      timelineItems: { pageInfo: more("t1"), nodes: crossRefs(2) },
+    });
+    const gh = fakeGitHub((body) =>
+      body.variables.id === undefined
+        ? Response.json({ data: { repository: { issue: node } } })
+        : Response.json({ data: { node: { timelineItems: { pageInfo: last, nodes: crossRefs(3) } } } }),
+    );
+    const [t] = await githubTracker({ owner: "o", repo: "r", token: "t", fetch: gh.fetch }).issues(["o/r#4"]);
+    expect(t?.linkedIssues).toBe(5);
+  });
+});
+
 describe("githubTracker errors", () => {
   test("401 refuses naming the operation, status, token variable and gh commands, never the token", async () => {
     const gh = fakeGitHub(() => Response.json({ message: "Bad credentials ghp_secret" }, { status: 401 }));
