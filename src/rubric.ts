@@ -149,8 +149,8 @@ export function loadRubric(projectRoot: string, name: string): LoadedRubric {
       return { rubric: parseRubric(text, path), hash: rubricHash(text), path, local };
     }
   }
-  const shared = join(RUBRIC_DIR, name + ".yaml");
-  const local = join(RUBRIC_DIR, name + ".local.yaml");
+  const shared = join(RUBRIC_DIR, `${name}.yaml`);
+  const local = join(RUBRIC_DIR, `${name}.local.yaml`);
   throw new RubricError(`no rubric "${name}": neither ${shared} nor ${local} exists`);
 }
 

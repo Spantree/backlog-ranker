@@ -98,7 +98,7 @@ export function openCache(
       // one opened the file survive; this run's own answers win a tie.
       const merged: CacheFile = { schema: SCHEMA, engine, model, entries: { ...readEntries(), ...added } };
       const tmp = `${path}.${process.pid}.tmp`;
-      writeFileSync(tmp, JSON.stringify(merged) + "\n");
+      writeFileSync(tmp, `${JSON.stringify(merged)}\n`);
       renameSync(tmp, path);
       dirty = false;
     },

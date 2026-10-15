@@ -144,8 +144,8 @@ export function canonicalJson(value: unknown): string {
     const entries = Object.entries(value as Record<string, unknown>)
       .filter(([, v]) => v !== undefined)
       .sort(([a], [b]) => byCodePoint(a, b));
-    const members = entries.map(([k, v]) => JSON.stringify(k) + ":" + canonicalJson(v));
-    return "{" + members.join(",") + "}";
+    const members = entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`);
+    return `{${members.join(",")}}`;
   }
   return JSON.stringify(value);
 }

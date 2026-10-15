@@ -111,7 +111,7 @@ export async function tiebreak(opts: {
     let pFirst = 0;
     for (const q of Object.values(questions)) {
       const answer = opts.cache.get(hash, q)!;
-      pFirst += answer.kind === "choice" ? (answer.probabilities["first"] ?? 0) : 0.5;
+      pFirst += answer.kind === "choice" ? (answer.probabilities.first ?? 0) : 0.5;
     }
     pFirst /= 2;
     wins.set(a.key, wins.get(a.key)! + pFirst);

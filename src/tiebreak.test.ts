@@ -101,9 +101,10 @@ describe("tiebreak", () => {
     const asked: string[] = [];
     const spy: DecisionEngine = {
       ...engine,
-      decide: (state, qs) => (
-        asked.push(...Object.values(qs).map((q) => q.instructions)), engine.decide(state, qs)
-      ),
+      decide: (state, qs) => {
+        asked.push(...Object.values(qs).map((q) => q.instructions));
+        return engine.decide(state, qs);
+      },
     };
     await tiebreak({ rubric: RUBRIC, rows: rank(RUBRIC, scored).ranked, states, top: 2, engine: spy, cache });
     expect(asked[0]).toContain("How much? Levels, lowest first: low | mid | high");
@@ -134,7 +135,10 @@ describe("tiebreak", () => {
     let sent = 0;
     const spy: DecisionEngine = {
       ...engine,
-      decide: (state, qs) => ((sent = stateBytes(state)), engine.decide(state, qs)),
+      decide: (state, qs) => {
+        sent = stateBytes(state);
+        return engine.decide(state, qs);
+      },
     };
     const r = await tiebreak({
       rubric: RUBRIC,
