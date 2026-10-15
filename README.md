@@ -19,7 +19,7 @@ gh auth login
 export GITHUB_TOKEN=$(gh auth token)
 export OPENROUTER_API_KEY=...   # or TYPESAFE_API_KEY with --backend typesafe
 
-npx backlog-ranker \
+npx backlog-ranker rank \
   --rubric node_modules/backlog-ranker/rubrics/impact-roi.yaml \
   --source github:octocat/hello-world \
   --allow-once --backend openrouter
@@ -39,7 +39,7 @@ model: jev-1.14
 Copy the example rubric to `.backlog-ranker/rubrics/impact-roi.yaml`, edit its levels, then:
 
 ```bash
-npx backlog-ranker --rubric impact-roi --source github:acme/app --tiebreak 5
+npx backlog-ranker rank --rubric impact-roi --source github:acme/app --tiebreak 5
 ```
 
 ## More

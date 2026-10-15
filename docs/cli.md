@@ -1,25 +1,22 @@
 # CLI
 
 ```text
-usage: backlog-ranker [rank] -r <rubric> -s <source> [options]
-       backlog-ranker calibrate -r <rubric> -s <source> --hand KEY,KEY,... [options]
-       backlog-ranker explain -r <rubric> <owner/repo#123> [options]
+usage: backlog-ranker <verb> [options]
 
 verbs:
-  rank       Rank a source's open tickets against a rubric; the default
-             when the first argument is a flag
+  rank       Rank a source's open tickets against a rubric
   calibrate  Compare the tool's ranking with a hand ranking
   explain    Show one ticket's scores, gates and flags
 
 Run `backlog-ranker <verb> --help` for a verb's options.
 ```
 
-With no verb and a flag first, `backlog-ranker` runs `rank`: `backlog-ranker -r impact-roi -s github:acme/app` and `backlog-ranker rank -r impact-roi -s github:acme/app` are the same run. A first word that is not a verb is refused. Every verb reads `.backlog-ranker/config.yaml` from the project root and checks the source against its allowlist before anything else (see [config.md](config.md)). Unknown flags, stray arguments and malformed values are refused by name. Short aliases: `-r` rubric, `-s` source, `-w` weight, `-t` tiebreak, `-j` json, `-h` help.
+Every verb reads `.backlog-ranker/config.yaml` from the project root and checks the source against its allowlist before anything else (see [config.md](config.md)). Unknown flags, stray arguments and malformed values are refused by name. Short aliases: `-r` rubric, `-s` source, `-w` weight, `-t` tiebreak, `-j` json, `-h` help.
 
 ## rank
 
 ```text
-usage: backlog-ranker [rank] --rubric <name|path> --source <spec> [options]
+usage: backlog-ranker rank --rubric <name|path> --source <spec> [options]
 
   -r, --rubric <name>     Rubric under .backlog-ranker/rubrics/, or a YAML file path
                           (a relative path resolves against the project root)
@@ -42,7 +39,7 @@ Ranks every open issue of the source (pull requests are never included) and prin
 - `--allow-once` admits `--source` for this run only and prints what will be sent. `--backend` applies only with it and only when no config file exists, and is required then; with a config file the committed config chooses the backend and `--backend` is refused.
 
 ```bash
-backlog-ranker -r impact-roi -s github:acme/app -w impact=2 -t 5
+backlog-ranker rank -r impact-roi -s github:acme/app -w impact=2 -t 5
 ```
 
 ## calibrate

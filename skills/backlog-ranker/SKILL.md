@@ -4,7 +4,7 @@ description: >-
   Rank a GitHub repository's open issues by criteria the user chooses:
   turn "rank by impact and ROI" or "rank by what unblocks the launch"
   into a rubric one question at a time, calibrate it against the user's
-  own hand ranking (Kendall's tau), then run `backlog-ranker -r … -s …`
+  own hand ranking (Kendall's tau), then run `backlog-ranker rank`
   and present the table. Use when the user asks to rank, prioritize,
   order or triage a backlog or a set of issues by value, impact, effort,
   ROI or any criterion of their own, or to build, tune, calibrate or
@@ -15,7 +15,7 @@ argument-hint: "[what to rank by, e.g. impact and ROI]"
 
 # Backlog ranker
 
-`backlog-ranker` ranks by asking a decision model (TypeSafe's Jev) narrow
+`backlog-ranker rank` asks a decision model (TypeSafe's Jev) narrow
 questions about one issue at a time, then weighs, divides and gates
 the answers in code. The rubric is the whole design: a vague level
 makes noise, a concrete one makes a ranking. This skill builds the
@@ -95,7 +95,7 @@ re-asks only the questions whose wording changed.
 ## Run and present
 
 ```bash
-backlog-ranker -r <name> -s github:<owner>/<repo> [--weight impact=2] [--tiebreak 10] [--json]
+backlog-ranker rank --rubric <name> --source github:<owner>/<repo> [--weight impact=2] [--tiebreak 10] [--json]
 ```
 
 Every row shows each criterion's score (a probability-weighted level
