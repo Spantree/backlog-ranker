@@ -5,7 +5,10 @@ import { join } from "node:path";
 import { rankBacklog } from "./api.js";
 import { openCache } from "./cache.js";
 import type { DecisionAnswer, DecisionEngine } from "./engine.js";
+import { isRefusal } from "./errors.js";
+import { parseRubric } from "./rubric.js";
 import type { Ticket } from "./ticket.js";
+import type { Tracker } from "./trackers/tracker.js";
 
 const NOW = new Date("2026-10-15T00:00:00Z");
 const RUBRIC_PATH = join(import.meta.dirname, "fixtures", "rubric.yaml");
@@ -24,6 +27,8 @@ const TRUTH: Record<string, Truth> = {
   middling: { impact: 2, effort: 2 },
   "token in a log": { impact: 1, effort: 3, security: 0.9 },
   "something vague": { impact: 4, effort: 0, judgeable: 0.2 },
+  "costly big": { impact: 4, effort: 4 },
+  "cheap small": { impact: 1, effort: 0 },
 };
 
 const ticket = (n: number, title: string): Ticket => ({
@@ -52,17 +57,28 @@ function stubEngine(): DecisionEngine & { calls: number } {
     calls: 0,
     async decide(state: unknown, questions: Parameters<DecisionEngine["decide"]>[1]) {
       engine.calls++;
-      const truth = TRUTH[(state as { title: string }).title];
-      if (truth === undefined) throw new Error("stub engine asked about an unknown ticket");
       const answers: Record<string, DecisionAnswer> = {};
       for (const [id, q] of Object.entries(questions)) {
+        if (q.kind === "choice") {
+          // A tie-break pair: always prefer the ticket in `second`, in
+          // either option order.
+          answers[id] = {
+            kind: "choice",
+            choice: "second",
+            probabilities: { first: 0.2, second: 0.8 },
+            confidence: 0.9,
+          };
+          continue;
+        }
+        const truth = TRUTH[(state as { title: string }).title];
+        if (truth === undefined) throw new Error("stub engine asked about an unknown ticket");
         if (q.kind === "score") {
           const value = id === "impact" ? truth.impact : truth.effort;
           answers[id] = { kind: "score", value, probabilities: [], confidence: 0.9 };
-        } else if (q.kind === "noul") {
+        } else {
           const p = id === "security" ? (truth.security ?? 0.1) : (truth.judgeable ?? 0.9);
           answers[id] = { kind: "noul", probability: p };
-        } else throw new Error("stub engine asked a choice");
+        }
       }
       return { servedModel: "stub-1-20261015", answers };
     },
@@ -92,5 +108,113 @@ describe("rankBacklog", () => {
     expect(engine.calls).toBe(4);
     expect(result.states.get("acme/app#1")?.title).toBe("big win");
     expect(result.tiebreak).toBeUndefined();
+  });
+
+  test("a re-weighted second call against the same cache asks the engine nothing", async () => {
+    const rubric = parseRubric(
+      `name: sum
+compose: weighted_sum
+criteria:
+  - id: impact
+    direction: benefit
+    question: How much?
+    levels: [a, b, c, d, e]
+  - id: effort
+    direction: cost
+    question: How hard?
+    levels: [a, b, c, d, e]
+`,
+      "sum",
+    );
+    const pair = [ticket(5, "costly big"), ticket(6, "cheap small")];
+    const engine = stubEngine();
+    const cache = openCache(tmp(), engine.id, engine.model);
+    const first = await rankBacklog({ rubric, tickets: pair, engine, cache, now: () => NOW });
+    expect(first.ranking.ranked.map((r) => r.key)).toEqual(["acme/app#6", "acme/app#5"]);
+    expect(engine.calls).toBe(2);
+
+    const again = await rankBacklog({
+      rubric,
+      tickets: pair,
+      engine,
+      cache,
+      now: () => NOW,
+      weights: { impact: 2 },
+    });
+    expect(engine.calls).toBe(2);
+    expect(again.stats).toMatchObject({ requests: 0, cachedAnswers: 4, askedAnswers: 0 });
+    expect(again.rubric.criteria[0]?.weight).toBe(2);
+    expect(again.ranking.ranked.map((r) => r.key)).toEqual(["acme/app#5", "acme/app#6"]);
+  });
+
+  test("reads a tracker's pending tickets and flushes the cache for the next run", async () => {
+    const root = tmp();
+    const engine = stubEngine();
+    const tracker: Tracker = {
+      source: "github:acme/app",
+      pending: async () => TICKETS,
+      issues: async () => {
+        throw new Error("rank never looks issues up by key");
+      },
+    };
+    await rankBacklog({
+      rubric: RUBRIC_PATH,
+      tracker,
+      engine,
+      cache: openCache(root, engine.id, engine.model),
+      now: () => NOW,
+    });
+    expect(engine.calls).toBe(4);
+    const warm = await rankBacklog({
+      rubric: RUBRIC_PATH,
+      tracker,
+      engine,
+      cache: openCache(root, engine.id, engine.model),
+      now: () => NOW,
+    });
+    expect(engine.calls).toBe(4);
+    expect(warm.stats.requests).toBe(0);
+  });
+
+  test("a tie-break reorders the top unpinned rows and reports its own stats", async () => {
+    const engine = stubEngine();
+    const cache = openCache(tmp(), engine.id, engine.model);
+    const result = await rankBacklog({
+      rubric: RUBRIC_PATH,
+      tickets: TICKETS,
+      engine,
+      cache,
+      now: () => NOW,
+      tiebreak: 3,
+    });
+    // #3 is pinned and stays first; the one unpinned pair (#1, #2) goes to
+    // the ticket sent as `second`, #2.
+    expect(result.ranking.ranked.map((r) => r.key)).toEqual(["acme/app#3", "acme/app#2", "acme/app#1"]);
+    expect(result.tiebreak).toEqual({ pairs: 1, requests: 1, cacheHits: 0, truncatedPairs: 0, top: 3 });
+    expect(engine.calls).toBe(5);
+  });
+
+  test("refuses both or neither of tickets and tracker, and a tie-break depth out of range", async () => {
+    const engine = stubEngine();
+    const cache = openCache(tmp(), engine.id, engine.model);
+    const tracker: Tracker = {
+      source: "github:acme/app",
+      pending: async () => TICKETS,
+      issues: async () => TICKETS,
+    };
+    const base = { rubric: RUBRIC_PATH, engine, cache };
+    for (const run of [
+      rankBacklog(base),
+      rankBacklog({ ...base, tickets: TICKETS, tracker }),
+      rankBacklog({ ...base, tickets: TICKETS, tiebreak: 11 }),
+      rankBacklog({ ...base, tickets: TICKETS, tiebreak: 0 }),
+    ]) {
+      const err = await run.then(
+        () => undefined,
+        (e: unknown) => e,
+      );
+      expect(isRefusal(err)).toBe(true);
+    }
+    expect(engine.calls).toBe(0);
   });
 });
