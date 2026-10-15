@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { calibrateBacklog, rankBacklog } from "./api.js";
+import { calibrateBacklog, explainTicket, rankBacklog } from "./api.js";
 import { type AnswerCache, openCache } from "./cache.js";
 import type { DecisionAnswer, DecisionEngine } from "./engine.js";
 import { parseRubric, type Rubric } from "./rubric.js";
@@ -290,5 +290,61 @@ describe("fact gates with the tie-break and calibration", () => {
       now: () => NOW,
     });
     expect(result.tool).toEqual(["acme/app#4", "acme/app#2", "acme/app#1", "acme/app#3"]);
+  });
+});
+
+describe("fact gates in explainTicket", () => {
+  const explain = async (t: Ticket, rubric = rubricWith()) => {
+    const engine = stubEngine();
+    return explainTicket({ rubric, ticket: t, engine, cache: cacheFor(engine), now: () => NOW });
+  };
+
+  test("carries the ticket's facts and each fact gate's value, at_least and outcome", async () => {
+    const result = await explain(
+      ticket(1, "big win", { reactions: 2, linkedIssues: 1, openBlockers: 2, assignees: 1 }),
+    );
+    expect(result.facts).toEqual({
+      age: "under a month",
+      reactions: 2,
+      linked_issues: 1,
+      duplicates: 0,
+      open_blockers: 2,
+      open_closing_prs: 0,
+      assignees: 1,
+    });
+    expect(result.factGates).toEqual([
+      {
+        id: "blocked",
+        fact: "open_blockers",
+        action: "sink",
+        atLeast: 1,
+        value: 2,
+        fired: true,
+        outcome: "sunk",
+      },
+      {
+        id: "in_progress",
+        fact: "open_closing_prs",
+        action: "hold",
+        atLeast: 1,
+        value: 0,
+        fired: false,
+        outcome: "none",
+      },
+    ]);
+    expect(result.flags).toMatchObject({ sunkBy: ["blocked"], heldBy: [] });
+  });
+
+  test("a pinned ticket's fired sink has no effect; its fired hold holds it", async () => {
+    const pinnedBlocked = await explain(ticket(1, "token in a log", { openBlockers: 1, openClosingPrs: 1 }));
+    expect(pinnedBlocked.factGates.map((g) => [g.id, g.fired, g.outcome])).toEqual([
+      ["blocked", true, "none"],
+      ["in_progress", true, "held"],
+    ]);
+    expect(pinnedBlocked.flags).toMatchObject({
+      pinnedBy: ["security"],
+      heldBy: ["in_progress"],
+      sunkBy: [],
+    });
   });
 });
