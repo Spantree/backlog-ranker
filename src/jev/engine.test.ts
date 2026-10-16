@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DecisionQuestion } from "../engine.js";
 import { isRefusal } from "../errors.js";
+import { neutralizeImageReferences } from "./engine.js";
 import { createJevEngine, JevError, type JevFetch } from "./index.js";
 
 const FIXTURES = join(import.meta.dir, "fixtures");
@@ -127,6 +128,35 @@ describe("createJevEngine", () => {
       'unknown Jev model "jev-latest"',
     );
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe("image-reference tokens in issue text", () => {
+  const token = `<image:${"0123456789abcdef".repeat(2)}>`;
+
+  test("are broken in the state and questions, so the SDK sends the request", async () => {
+    const { fetch, calls } = replay([json(fixture("typesafe-response.json"))]);
+    const engine = createJevEngine({ backend: "typesafe", apiKey: "k", fetch });
+    const state = { ticket: `See ${token} for the trace`, labels: [token], [token]: 1 };
+    const questions: Record<string, DecisionQuestion> = {
+      ...QUESTIONS,
+      is_bug: { kind: "noul", instructions: `Is ${token} a defect?` },
+    };
+    await engine.decide(state, questions);
+    const broken = `<image: ${"0123456789abcdef".repeat(2)}>`;
+    expect(calls[0]?.body.state).toEqual({
+      ticket: `See ${broken} for the trace`,
+      labels: [broken],
+      [broken]: 1,
+    });
+    expect(JSON.stringify(calls[0]?.body)).not.toContain("<image:0");
+    expect(calls[0]?.body.questions).toMatchObject({ is_bug: { instructions: `Is ${broken} a defect?` } });
+  });
+
+  test("leave a state without one exactly as it was", () => {
+    const state = { ticket: "an <image:abc> and <image:XYZ> stay", n: 1, ok: true, none: null, list: ["a"] };
+    expect(neutralizeImageReferences(state)).toEqual(state);
+    expect(JSON.stringify(neutralizeImageReferences(state))).toBe(JSON.stringify(state));
   });
 });
 

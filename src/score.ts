@@ -67,6 +67,21 @@ export async function pool<T>(
   if (failure !== undefined) throw failure.error;
 }
 
+/** Prefixes a failed decision's message with what it was about (a ticket
+ * key, or a tie-break pair), so a user can find the ticket that failed.
+ * Keys only, never issue text. The error keeps its class, brand and
+ * fields; one whose message cannot be written passes through as is. */
+export function aboutTickets(err: unknown, keys: string): unknown {
+  if (err instanceof Error) {
+    try {
+      err.message = `${keys}: ${err.message}`;
+    } catch {
+      // A frozen error stays unnamed rather than masking the failure.
+    }
+  }
+  return err;
+}
+
 export async function scoreTickets(opts: {
   tickets: readonly Ticket[];
   rubric: Rubric;
@@ -107,11 +122,13 @@ export async function scoreTickets(opts: {
     if (missing.length > 0) {
       stats.requests++;
       stats.askedAnswers += missing.length;
-      const fresh = await opts.engine.decide(state, Object.fromEntries(missing));
+      const fresh = await opts.engine.decide(state, Object.fromEntries(missing)).catch((err: unknown) => {
+        throw aboutTickets(err, ticket.key);
+      });
       for (const [id, q] of missing) {
         const answer = fresh.answers[id];
         if (answer === undefined)
-          throw new Error(`the ${opts.engine.id} engine returned no answer for "${id}"`);
+          throw new Error(`${ticket.key}: the ${opts.engine.id} engine returned no answer for "${id}"`);
         answers[id] = answer;
         opts.cache.put(hash, q, answer, fresh.servedModel);
       }

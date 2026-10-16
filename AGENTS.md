@@ -32,7 +32,7 @@ mise exec -- npm pack --dry-run  # check what ships
 
 - Read-only toward GitHub and Linear. Nothing in the package writes a label, comment, field or anything else to a tracker.
 - Allowlist first. Every verb checks the source against `sources` in the config before reading a rubric, building a tracker or engine, reading a key, or sending a request. A refused source sends nothing and writes no cache. `--allow-once` never writes config. Never add a source to an allowlist to get a test or a run through.
-- Only title, body and labels leave the tracker, plus facts computed in code. Errors name the backend or operation and the HTTP status, never a key, a token or issue text.
+- Only title, body and labels leave the tracker, plus facts computed in code. Errors name the backend or operation and the HTTP status, never a key, a token or issue text; a failed decision is prefixed with its issue key (or tie-break pair). The Jev adapter breaks the SDK's image-reference token (`<image:` + 32 hex) in everything it sends, which leaves any state without one, and so its hash, unchanged.
 - No network in tests. The suite runs on `src/fixtures/replay.ts`, which serves the recorded GitHub page, the Linear team and the Jev responses and counts requests per destination (`github`, `linear`, `jev`, `other`).
 - Recorded fixtures replay by state hash. A Jev recording is found by the first 16 hex digits of the SHA-256 of the state sent; a state with no recording answers 404, so a changed state fails loudly instead of replaying a stale answer. The state hash excludes the issue key.
 - The model version is pinned; answers from any other served version are refused.

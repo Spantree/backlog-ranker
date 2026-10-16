@@ -14,7 +14,7 @@ import type { AnswerCache } from "./cache.js";
 import { type RankedRow, rankGroup } from "./compose.js";
 import type { DecisionEngine, DecisionQuestion } from "./engine.js";
 import type { Rubric } from "./rubric.js";
-import { DEFAULT_CONCURRENCY, longestQuestionBytes, pool } from "./score.js";
+import { aboutTickets, DEFAULT_CONCURRENCY, longestQuestionBytes, pool } from "./score.js";
 import { fitBodies, PromptBudgetError, stateBytes, stateHash, type TicketState } from "./state.js";
 
 export const MAX_TIEBREAK = 10;
@@ -111,11 +111,14 @@ export async function tiebreak(opts: {
     if (missing.length === 0) stats.cacheHits++;
     else {
       stats.requests++;
-      const fresh = await opts.engine.decide(state, Object.fromEntries(missing));
+      const pair = `${a.key} vs ${b.key}`;
+      const fresh = await opts.engine.decide(state, Object.fromEntries(missing)).catch((err: unknown) => {
+        throw aboutTickets(err, pair);
+      });
       for (const [id, q] of missing) {
         const answer = fresh.answers[id];
         if (answer === undefined)
-          throw new Error(`the ${opts.engine.id} engine returned no answer for "${id}"`);
+          throw new Error(`${pair}: the ${opts.engine.id} engine returned no answer for "${id}"`);
         opts.cache.put(hash, q, answer, fresh.servedModel);
       }
     }

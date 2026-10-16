@@ -94,6 +94,28 @@ function bunSafeFetch(inner: JevFetch): JevFetch {
   };
 }
 
+/** The SDK's image-reference token, copied from @typesafe-ai/sdk 0.7.0
+ * (`REFERENCE`): it scans the whole serialized request for it and throws
+ * "Image references without an attached image" on any it finds, so one
+ * ticket quoting such a token would fail every run. */
+const IMAGE_REFERENCE = /<image:([0-9a-f]{32})>/g;
+
+/** Breaks every image-reference token in `value`'s strings (keys
+ * included) with a space after the colon, which the model still reads as
+ * the same text. A value with no such token comes back unchanged, so its
+ * state hash, and the cache and recordings keyed by it, stay the same. */
+export function neutralizeImageReferences<T>(value: T): T {
+  const walk = (v: unknown): unknown => {
+    if (typeof v === "string") return v.replace(IMAGE_REFERENCE, "<image: $1>");
+    if (Array.isArray(v)) return v.map(walk);
+    if (typeof v === "object" && v !== null) {
+      return Object.fromEntries(Object.entries(v).map(([k, x]) => [walk(k) as string, walk(x)]));
+    }
+    return v;
+  };
+  return walk(value) as T;
+}
+
 function toQuestion(q: DecisionQuestion): Question {
   switch (q.kind) {
     case "score": {
@@ -175,13 +197,13 @@ export function createJevEngine(options: JevEngineOptions): DecisionEngine {
       const ids = Object.keys(questions);
       if (ids.length === 0) throw new JevError("a decision needs at least one question");
       const wire: Record<string, Question> = {};
-      for (const [id, q] of Object.entries(questions)) wire[id] = toQuestion(q);
+      for (const [id, q] of Object.entries(questions)) wire[id] = neutralizeImageReferences(toQuestion(q));
 
       let raw: unknown;
       try {
         raw = await client.systemOne({
           model: backend.requestSpelling(model),
-          state: state as NonNullable<EntryType>,
+          state: neutralizeImageReferences(state) as NonNullable<EntryType>,
           questions: wire,
         });
       } catch (err) {

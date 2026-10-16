@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openCache } from "./cache.js";
 import type { DecisionAnswer, DecisionEngine } from "./engine.js";
+import { isRefusal, RefusalError } from "./errors.js";
 import { parseRubric } from "./rubric.js";
 import { pool, scoreTickets } from "./score.js";
 import { stateHash, toState } from "./state.js";
@@ -157,6 +158,28 @@ describe("scoreTickets", () => {
       });
       expect(r.stats.requests).toBe(1);
     }
+  });
+
+  test("a failed decision names the ticket's key, keeping the error's class and brand", async () => {
+    const engine = fakeEngine();
+    const failing: DecisionEngine = {
+      ...engine,
+      async decide(state, questions) {
+        if (JSON.stringify(state).includes("poison")) throw new RefusalError("the backend answered HTTP 500");
+        return engine.decide(state, questions);
+      },
+    };
+    const err = await scoreTickets({
+      tickets: [ticket("K-1"), ticket("K-2", "poison body")],
+      rubric: RUBRIC,
+      engine: failing,
+      cache: openCache(tmp(), engine.id, engine.model),
+      now: NOW,
+      concurrency: 1,
+    }).catch((e: unknown) => e);
+    expect(isRefusal(err)).toBe(true);
+    expect(err).toBeInstanceOf(RefusalError);
+    expect((err as Error).message).toBe("K-2: the backend answered HTTP 500");
   });
 });
 
