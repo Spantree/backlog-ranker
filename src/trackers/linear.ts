@@ -181,6 +181,8 @@ export function linearKeyHint(apiKeyVar: string): string {
 
 /** Linear also reports a rejected key as a GraphQL error code. */
 const AUTH_CODES = new Set(["AUTHENTICATION_ERROR", "FORBIDDEN"]);
+/** Linear's rate limits answer HTTP 400 (sometimes 429) with this code. */
+const RATE_LIMIT_CODE = "RATELIMITED";
 
 function toTicket(node: IssueNode): Ticket {
   const linked = [...node.relations.nodes, ...node.inverseRelations.nodes].filter((r) =>
@@ -276,6 +278,9 @@ export function linearTracker(opts: LinearTrackerOptions): Tracker {
     const raw: unknown = await res.json().catch(() => undefined);
     const envelope = envelopeSchema.safeParse(raw);
     const errors = envelope.success ? (envelope.data.errors ?? []) : [];
+    if (res.status === 429 || errors.some((e) => e.extensions?.code === RATE_LIMIT_CODE)) {
+      throw new LinearTrackerError(`Linear rate-limited the request while ${operation}; retry later`);
+    }
     if (errors.some((e) => typeof e.extensions?.code === "string" && AUTH_CODES.has(e.extensions.code))) {
       throw refused();
     }

@@ -525,6 +525,34 @@ describe("refusals are value-free", () => {
     expect(err2.message).toBe("Linear answered HTTP 502 while listing KIT's pending issues");
   });
 
+  test.each([
+    [
+      "HTTP 400 with a RATELIMITED error",
+      () =>
+        Response.json(
+          { errors: [{ message: `Rate limit exceeded ${TEXT}`, extensions: { code: "RATELIMITED" } }] },
+          { status: 400 },
+        ),
+    ],
+    [
+      "HTTP 429 with a RATELIMITED error",
+      () =>
+        Response.json(
+          { errors: [{ message: `slow down ${SECRET}`, extensions: { code: "RATELIMITED" } }] },
+          { status: 429 },
+        ),
+    ],
+    ["HTTP 429 without a body", () => new Response(`${TEXT}`, { status: 429 })],
+  ])("%s refuses as a rate limit, naming the operation only", async (_name, reply) => {
+    const linear = fakeLinear(reply);
+    const err = await refusalOf(
+      linearTracker({ team: "KIT", apiKey: SECRET, fetch: linear.fetch }).pending(),
+    );
+    expect(err.message).toBe(
+      "Linear rate-limited the request while listing KIT's pending issues; retry later",
+    );
+  });
+
   test("a network failure says Linear could not be reached", async () => {
     const fetch = (async () => {
       throw new TypeError(`connect failed ${SECRET}`);
