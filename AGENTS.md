@@ -46,7 +46,7 @@ OPENROUTER_API_KEY=... mise exec -- bun scripts/capture-fixtures.ts
 OPENROUTER_API_KEY=... mise exec -- bun scripts/capture-fixtures.ts --model jev-1.13 --out <dir>
 ```
 
-It runs scoring and a top-10 tie-break over the fixture issues against a cold cache in a temporary directory, through OpenRouter, with ages pinned to `FIXTURE_NOW`, and writes each response to `src/fixtures/jev/<hash16>.json` with its `id` removed. `src/fixtures/jev/` holds the default model's (jev-1.14) recordings only: a recording is named by state hash alone, so a capture with any other `--model` refuses to run without an `--out <dir>` elsewhere, and replay answers 404 when the model a request names is not the recording's. It costs real requests: run it only when asked, then run the suite and commit the new recordings with the change that required them.
+It runs scoring and a top-10 tie-break over the fixture issues against a cold cache in a temporary directory, through OpenRouter, with ages pinned to `FIXTURE_NOW`, and writes each response to `src/fixtures/jev/<hash16>.json` with its `id` removed. Responses are held in memory and written only after the whole run has passed the engine's checks, so a failed run leaves the folder untouched. `src/fixtures/jev/` holds the default model's (jev-1.14) recordings only: a recording is named by state hash alone, so a capture with any other `--model` refuses to run without an `--out <dir>` elsewhere, and replay answers 404 when the model a request names is not the recording's. It costs real requests: run it only when asked, then run the suite and commit the new recordings with the change that required them.
 
 ## The Bun SDK shim
 
