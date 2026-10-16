@@ -78,6 +78,17 @@ interface Prepared {
   header: RunHeader;
 }
 
+/** `--allow-once`'s line on stderr: everything an issue sends, the
+ * computed facts included (see `state.ts`), and where it goes. */
+function allowOnceNotice(source: SourceRef, backend: string): string {
+  const issues = source.kind === "github" ? "open issues" : "pending issues";
+  return (
+    `the titles, bodies and labels of ${issues} in ${source.spec}, with each issue's age bucket, ` +
+    `reaction count, linked issue count and duplicate count, will be sent to ${backend} ` +
+    `for this run only; nothing is saved to config\n`
+  );
+}
+
 /**
  * The pipeline every verb shares: resolve the project, check the
  * allowlist, read the rubric, build the tracker then the engine, open the
@@ -93,16 +104,12 @@ async function prepare(
   const { source } = run;
   const project = await deps.resolve(deps.cwd(), io.env, run.load ?? {});
   assertAllowed(source, project.sources, project.allowlistKey);
-  if (run.load?.allowOnce !== undefined) {
-    const issues = source.kind === "github" ? "open issues" : "pending issues";
-    io.stderr(
-      `the titles, bodies and labels of ${issues} in ${source.spec} will be sent to ` +
-        `${project.backend} for this run only; nothing is saved to config\n`,
-    );
-  }
   const loaded = loadRubricArg(project.projectRoot, run.rubric);
   const tracker = project.tracker(source);
   const engine = project.engine();
+  // Announced only once both keys were read, so a run that refuses on a
+  // missing key never claimed a send; still before any request leaves.
+  if (run.load?.allowOnce !== undefined) io.stderr(allowOnceNotice(source, project.backend));
   const cache = openCache(project.projectRoot, engine.id, engine.model, deps.now);
   const header: RunHeader = {
     rubricPath: loaded.path,
