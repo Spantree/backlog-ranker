@@ -553,6 +553,45 @@ describe("refusals are value-free", () => {
     );
   });
 
+  test("a request Linear does not answer in time is aborted and refuses naming the time limit", async () => {
+    let signal: AbortSignal | undefined;
+    const fetch = ((_: unknown, init?: RequestInit) => {
+      signal = init?.signal ?? undefined;
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+      });
+    }) as unknown as Fetch;
+    const err = await refusalOf(
+      linearTracker({ team: "KIT", apiKey: SECRET, fetch, timeoutMs: 20 }).issues(["KIT-1"]),
+    );
+    expect(signal?.aborted).toBe(true);
+    expect(err.message).toBe("Linear did not answer within 20 ms while reading KIT-1");
+  });
+
+  test("a reply whose body does not arrive in time refuses as timed out, not as HTTP 200", async () => {
+    const fetch = (async (_: unknown, init?: RequestInit) => {
+      const body = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(`{"data":{"issue":{"title":"${TEXT}`));
+          init?.signal?.addEventListener("abort", () => controller.error(init.signal?.reason));
+        },
+      });
+      return new Response(body, { status: 200 });
+    }) as unknown as Fetch;
+    const err = await refusalOf(
+      linearTracker({ team: "KIT", apiKey: SECRET, fetch, timeoutMs: 20 }).issues(["KIT-1"]),
+    );
+    expect(err.message).toBe("Linear did not answer within 20 ms while reading KIT-1");
+  });
+
+  test("the default time limit is named in seconds", async () => {
+    const fetch = (async () => {
+      throw new DOMException("The operation timed out.", "TimeoutError");
+    }) as unknown as Fetch;
+    const err = await refusalOf(linearTracker({ team: "KIT", apiKey: SECRET, fetch }).issues(["KIT-1"]));
+    expect(err.message).toBe("Linear did not answer within 30 seconds while reading KIT-1");
+  });
+
   test("a network failure says Linear could not be reached", async () => {
     const fetch = (async () => {
       throw new TypeError(`connect failed ${SECRET}`);
