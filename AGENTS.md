@@ -26,7 +26,20 @@ mise exec -- bun run lint        # biome
 mise exec -- bun test
 mise exec -- bun run build       # empties dist/, then tsc; npm pack and publish run it (prepack)
 mise exec -- npm pack --dry-run  # check what ships
+mise exec -- node scripts/smoke-package.mjs  # pack, install in a temp project, run the CLI, import the library (needs the npm registry)
 ```
+
+CI (`.github/workflows/ci.yml`) runs these on every pull request and push to `main`.
+
+## Releasing
+
+The package publishes to npm as `@feniix/backlog-ranker`. To release: bump `version` in `package.json` on a branch, merge to `main`, then run the **Release** workflow (`.github/workflows/release.yml`) by hand from `main`. It re-runs the checks and the smoke test, then `npm publish`; npm refuses a version already published. It authenticates with npm trusted publishing, so no npm token is stored. While the repository is private, npm attaches no provenance attestation.
+
+One-time setup, by the owner of the `@feniix` npm scope:
+
+1. Publish the first version by hand to create the package: `mise exec -- npm login`, then `mise exec -- npm publish` from a clean `main`.
+2. On npmjs.com, under the package's settings, add a trusted publisher: GitHub Actions, repository `Spantree/backlog-ranker`, workflow `release.yml`, no environment.
+
 
 ## Invariants
 

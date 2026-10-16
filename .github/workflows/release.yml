@@ -1,0 +1,31 @@
+name: Release
+
+# Publishes package.json's version to npm. Run it by hand from main; npm
+# refuses a version that is already published. Authenticates with npm
+# trusted publishing (OIDC), so no npm token is stored in the repository.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: jdx/mise-action@v3
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run lint
+      - run: bun test
+      - run: node scripts/smoke-package.mjs
+      # Node 22 bundles npm 10; trusted publishing needs npm 11.5.1 or later.
+      - run: npm install -g npm@11.16.0 --ignore-scripts
+      # prepack builds a clean dist/ first.
+      - run: npm publish
