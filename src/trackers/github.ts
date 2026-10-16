@@ -41,7 +41,7 @@ export interface GitHubTrackerOptions {
 }
 
 /** Linked issues count cross-references and connections whose other end
- * is an issue, plus sub-issues; pull requests and the parent do not count.
+ * is an issue (net of disconnections), plus sub-issues; pull requests and the parent do not count.
  * A cross-reference is told apart by its path, whose anchor names the
  * kind of item that made it (`#ref-issue-…`, `#ref-pullrequest-…`):
  * resolving each reference's source is what pushes a busy repository's
@@ -52,12 +52,13 @@ export interface GitHubTrackerOptions {
 const NESTED = {
   labels: { args: "", first: 100, nodes: "nodes { name }" },
   timelineItems: {
-    args: "itemTypes: [CROSS_REFERENCED_EVENT, CONNECTED_EVENT, MARKED_AS_DUPLICATE_EVENT, UNMARKED_AS_DUPLICATE_EVENT]",
+    args: "itemTypes: [CROSS_REFERENCED_EVENT, CONNECTED_EVENT, DISCONNECTED_EVENT, MARKED_AS_DUPLICATE_EVENT, UNMARKED_AS_DUPLICATE_EVENT]",
     first: 50,
     nodes: `nodes {
       __typename
       ... on CrossReferencedEvent { resourcePath }
       ... on ConnectedEvent { source { __typename ... on Node { id } } subject { __typename ... on Node { id } } }
+      ... on DisconnectedEvent { source { __typename ... on Node { id } } subject { __typename ... on Node { id } } }
       ... on MarkedAsDuplicateEvent { canonical { ... on Node { id } } }
       ... on UnmarkedAsDuplicateEvent { canonical { ... on Node { id } } }
     }`,
@@ -301,13 +302,28 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 /** The anchor of a cross-reference's path names what made it. */
 const fromAnIssue = (event: TimelineNode) => /#ref-issue-/.test(event.resourcePath ?? "");
 
-/** Whether a cross-reference or connection links this issue to another
- * issue. A connection's own issue may sit at either end, so the other
- * end is the one that is not this issue. */
-function linksAnIssue(event: TimelineNode, self: string): boolean {
-  if (event.__typename === "CrossReferencedEvent") return fromAnIssue(event);
+/** The other issue a connection or disconnection names, if the other end
+ * is an issue. This issue may sit at either end, so the other end is the
+ * one that is not this issue. */
+function otherIssue(event: TimelineNode, self: string): string | undefined {
   const ends = [event.source, event.subject].filter((e): e is Subject => e != null && e.id !== self);
-  return ends.length === 1 && ends[0]?.__typename === "Issue";
+  const [other] = ends;
+  return ends.length === 1 && other?.__typename === "Issue" ? other.id : undefined;
+}
+
+/** Issues linked by cross-references, plus connections net of
+ * disconnections: a disconnection takes back a connection to the same
+ * other issue, so an issue connected and then disconnected does not
+ * count. */
+function linkedIssuesOf(events: TimelineNode[], self: string): number {
+  const crossRefs = events.filter((e) => e.__typename === "CrossReferencedEvent" && fromAnIssue(e)).length;
+  const net = new Map<string, number>();
+  for (const e of events) {
+    const step = e.__typename === "ConnectedEvent" ? 1 : e.__typename === "DisconnectedEvent" ? -1 : 0;
+    const other = step === 0 ? undefined : otherIssue(e, self);
+    if (other !== undefined) net.set(other, (net.get(other) ?? 0) + step);
+  }
+  return crossRefs + [...net.values()].reduce((sum, n) => sum + Math.max(0, n), 0);
 }
 
 /** Issues marked as duplicates of this one. Closing an issue as a
@@ -327,11 +343,6 @@ const openCount = (nodes: ({ state: string } | null)[]) => nodes.filter((n) => n
 
 function toTicket(owner: string, repo: string, node: IssueNode): Ticket {
   const events = node.timelineItems.nodes.filter((n): n is TimelineNode => n !== null);
-  const linked = events.filter(
-    (e) =>
-      (e.__typename === "CrossReferencedEvent" || e.__typename === "ConnectedEvent") &&
-      linksAnIssue(e, node.id),
-  ).length;
   return {
     key: `${owner}/${repo}#${node.number}`,
     title: node.title,
@@ -340,7 +351,7 @@ function toTicket(owner: string, repo: string, node: IssueNode): Ticket {
     url: node.url,
     createdAt: node.createdAt,
     reactions: node.reactions.totalCount,
-    linkedIssues: linked + node.subIssues.totalCount,
+    linkedIssues: linkedIssuesOf(events, node.id) + node.subIssues.totalCount,
     duplicates: duplicatesOf(events, node.id),
     openBlockers: node.issueDependenciesSummary.blockedBy,
     openClosingPrs: openCount(node.closedByPullRequestsReferences.nodes),
