@@ -20,7 +20,12 @@ export class SourceError extends RefusalError {
 }
 
 const LINEAR_TEAM_RE = /^[A-Za-z][A-Za-z0-9]{0,9}$/;
-const GITHUB_REPO_RE = /^([\w.-]+)\/([\w.-]+)$/;
+/** A GitHub owner starts with a letter or digit; a repository may start
+ * with a dot (`.github`) but is never `.` or `..`, so neither part can
+ * name a parent path. Shared with the issue-key grammar below. */
+const GITHUB_OWNER = "[A-Za-z0-9][\\w.-]*";
+const GITHUB_NAME = "(?!\\.\\.?(?:$|#))[\\w.-]+";
+const GITHUB_REPO_RE = new RegExp(`^(${GITHUB_OWNER})\\/(${GITHUB_NAME})$`);
 
 /** Parses `github:owner/repo` or `linear:TEAM`. The canonical `spec` is
  * lowercased for GitHub (owner and repo names are case-insensitive there)
@@ -83,7 +88,9 @@ export function assertAllowed(source: SourceRef, allowlist: readonly string[], s
  * may expand. N is a whole number from 1; a team key is a letter and up
  * to nine more letters or digits, as `linear:<TEAM>` spells it.
  */
-const ISSUE_KEY_RE = /^(?:([\w.-]+)\/([\w.-]+)#|([A-Za-z][A-Za-z0-9]{0,9})-|#)?([1-9]\d*)$/;
+const ISSUE_KEY_RE = new RegExp(
+  `^(?:(${GITHUB_OWNER})\\/(${GITHUB_NAME})#|([A-Za-z][A-Za-z0-9]{0,9})-|#)?([1-9]\\d*)$`,
+);
 
 export interface IssueKeyMatch {
   /** Present only when the key names its GitHub repository. */
