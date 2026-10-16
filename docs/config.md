@@ -120,7 +120,7 @@ Every answer is cached in `.backlog-ranker/cache/<engine>--<model>.json`, for ex
 
 - changing a weight, a threshold, `compose` or `confidence_floor` re-ranks from the cache with no requests;
 - rewording a level, adding a criterion or editing an issue asks only what changed;
-- answers from different model versions live in different files and never mix;
+- answers from different model versions live in different files and never mix, but dated snapshots of the one pinned version (`jev-1.14-20261014`, recorded in each entry) share its file, because the pin is the version, not the build;
 - the cache does not depend on the backend: answers fetched through OpenRouter answer a run against TypeSafe, and the reverse.
 
 The file is merged on write with an atomic rename, so a run keeps the answers another run flushed before it. There is no lock: two runs that flush at the same moment can lose one run's new answers, which are asked again on the next run. A file from another schema, engine or model, or a corrupt one, is treated as empty; a malformed entry in an otherwise sound file is dropped, and its question is asked again. Delete the directory to start cold.

@@ -7,7 +7,8 @@
  * changed weight or formula re-ranks from the cache; a reworded level, a
  * new criterion or an edited ticket asks only what changed; and answers
  * from two engines or two model versions never mix, because each pair
- * keeps its own file.
+ * keeps its own file. Dated snapshots of one pinned version share it:
+ * each entry records which snapshot answered.
  */
 
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
