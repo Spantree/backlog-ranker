@@ -13,7 +13,7 @@ The package ships an example at `rubrics/impact-roi.yaml` (in `node_modules/@fen
 | `name` | yes | | Shown in the run header |
 | `description` | no | | Free text |
 | `compose` | yes | | `roi` or `weighted_sum` |
-| `confidence_floor` | no | `0.5` | A score answered with lower confidence is flagged |
+| `confidence_floor` | no | `0.5` | A weighted criterion's score answered with lower confidence is flagged |
 | `criteria` | yes | | At least one; see below |
 | `gates` | no | `[]` | See below |
 | `fact_gates` | no | `[]` | See [Fact gates](#fact-gates) |
@@ -46,9 +46,9 @@ Each level describes a concrete situation a reader would recognize in an issue, 
 
 Ask impact and effort as two separate criteria. Never ask the model for a ratio, a count or a date; the tool computes those facts itself and sends them alongside the issue:
 
-- `age`: a bucket (`under a week`, `under a month`, `under a quarter`, `under a year`, `a year or more`), not a day count, so cached answers do not expire daily
+- `age`: a bucket (`under a week`, `under a month`, `under a quarter`, `under a year`, `a year or more`, or `unknown` when the tracker's creation date does not parse), not a day count, so cached answers do not expire daily
 - `reactions`: the issue's total reaction count
-- `linked_issues`: issues that cross-reference or are connected to it, plus its sub-issues (pull requests and the parent do not count)
+- `linked_issues`: issues that cross-reference or are connected to it, plus its sub-issues (pull requests and the parent do not count, nor a connection since disconnected)
 - `duplicates`: issues marked as duplicates of it (on GitHub, issues closed or marked as a duplicate of this one by name; one closed as a duplicate without naming the original links to nothing and is not counted)
 
 Three more facts are counted for [fact gates](#fact-gates) only and are never sent to the model:
@@ -61,7 +61,7 @@ Only the title, body and labels leave GitHub or Linear. A body that would push t
 
 ## Scores
 
-A criterion's score is the probability-weighted level index: 0 is the first level, `levels - 1` the last. Each score carries the model's confidence. A score under `confidence_floor` keeps its value and its place; the row is flagged `low-confidence:<id>` and the table marks it with `?`.
+A criterion's score is the probability-weighted level index: 0 is the first level, `levels - 1` the last. Each score carries the model's confidence. A score under `confidence_floor` keeps its value and its place; the row is flagged `low-confidence:<id>` and the table marks it with `?`. A criterion with weight 0 (in the rubric or through `--weight id=0`) adds nothing to the composite, so its confidence never flags a row.
 
 ## Gates
 

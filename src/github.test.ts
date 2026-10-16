@@ -161,6 +161,47 @@ describe("githubTracker pending()", () => {
     expect(t).toMatchObject({ linkedIssues: 2, duplicates: 0 });
   });
 
+  test("a disconnection takes back the connection to the same other issue", async () => {
+    const link = (type: string, other: string, selfFirst = true) => ({
+      __typename: type,
+      source: selfFirst ? ref("Issue", "I_6") : ref("Issue", other),
+      subject: selfFirst ? ref("Issue", other) : ref("Issue", "I_6"),
+    });
+    const node = issue(6, {
+      subIssues: { totalCount: 0 },
+      timelineItems: {
+        nodes: [
+          link("ConnectedEvent", "I_A"),
+          link("DisconnectedEvent", "I_A", false),
+          link("ConnectedEvent", "I_B"),
+          link("DisconnectedEvent", "I_C"),
+          link("ConnectedEvent", "I_D"),
+          link("DisconnectedEvent", "I_D"),
+          link("ConnectedEvent", "I_D"),
+          {
+            __typename: "DisconnectedEvent",
+            source: ref("Issue", "I_6"),
+            subject: ref("PullRequest", "I_B"),
+          },
+        ],
+      },
+    });
+    const gh = fakeGitHub(() =>
+      Response.json({
+        data: {
+          repository: { issues: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [node] } },
+        },
+      }),
+    );
+    const [t] = await githubTracker({ owner: "o", repo: "r", token: "t", fetch: gh.fetch }).pending();
+    // A disconnected; B still connected (a pull request's disconnection is not B's); a lone
+    // disconnection from C takes nothing below 0; D connected again after its disconnection.
+    expect(t?.linkedIssues).toBe(2);
+    const query = gh.bodies[0]?.query.replace(/\s+/g, " ") ?? "";
+    expect(query).toContain("DISCONNECTED_EVENT");
+    expect(query).toContain("... on DisconnectedEvent { source");
+  });
+
   test("duplicates count issues marked as duplicates of this one, never this one marked as a duplicate", async () => {
     const marked = (canonical: string) => ({
       __typename: "MarkedAsDuplicateEvent",

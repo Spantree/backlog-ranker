@@ -43,6 +43,12 @@ describe("toState", () => {
     expect(ageBucket("2025-01-01T00:00:00Z", NOW)).toBe("a year or more");
   });
 
+  test("an unreadable creation date is an unknown age, not a year or more", () => {
+    expect(ageBucket("not a date", NOW)).toBe("unknown");
+    expect(ageBucket("", NOW)).toBe("unknown");
+    expect(toState({ ...ticket("K-1"), createdAt: "garbage" }, NOW).state.facts.age).toBe("unknown");
+  });
+
   test("fits the serialized state plus the longest question under the byte budget, dense text included", () => {
     for (const body of [
       "a ".repeat(40_000),

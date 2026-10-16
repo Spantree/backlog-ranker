@@ -7,7 +7,8 @@
  * changed weight or formula re-ranks from the cache; a reworded level, a
  * new criterion or an edited ticket asks only what changed; and answers
  * from two engines or two model versions never mix, because each pair
- * keeps its own file.
+ * keeps its own file. Dated snapshots of one pinned version share it:
+ * each entry records which snapshot answered.
  */
 
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
@@ -49,6 +50,37 @@ export interface AnswerCache {
   readonly path: string;
 }
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+const isNumber = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+
+/** An answer of the shape an engine returns, every number finite. */
+function isAnswer(v: unknown): v is DecisionAnswer {
+  if (!isRecord(v)) return false;
+  if (v.kind === "noul") return isNumber(v.probability);
+  if (v.kind === "score")
+    return (
+      isNumber(v.value) &&
+      isNumber(v.confidence) &&
+      Array.isArray(v.probabilities) &&
+      v.probabilities.every(isNumber)
+    );
+  if (v.kind === "choice")
+    return (
+      typeof v.choice === "string" &&
+      isNumber(v.confidence) &&
+      isRecord(v.probabilities) &&
+      Object.values(v.probabilities).every(isNumber)
+    );
+  return false;
+}
+
+function isEntry(v: unknown): v is Entry {
+  return isRecord(v) && isAnswer(v.answer) && typeof v.served === "string" && typeof v.at === "string";
+}
+
 function fileName(engine: string, model: string): string {
   const safe = (s: string): string => s.replaceAll(/[^A-Za-z0-9._-]/g, "_");
   return `${safe(engine)}--${safe(model)}.json`;
@@ -63,16 +95,16 @@ export function openCache(
   const dir = join(projectRoot, CACHE_DIR);
   const path = join(dir, fileName(engine, model));
   /** The entries on disk now, or none: a file from another schema,
-   * engine or model is not ours to read, and a corrupt one is cold. */
+   * engine or model is not ours to read, and a corrupt one is cold. A
+   * malformed entry in an otherwise sound file is dropped, so its
+   * question is asked again. */
   const readEntries = (): Record<string, Entry> => {
     if (!existsSync(path)) return {};
     try {
       const raw = JSON.parse(readFileSync(path, "utf8")) as CacheFile;
-      const entriesOk =
-        typeof raw.entries === "object" && raw.entries !== null && !Array.isArray(raw.entries);
-      return raw.schema === SCHEMA && raw.engine === engine && raw.model === model && entriesOk
-        ? raw.entries
-        : {};
+      const ours = raw.schema === SCHEMA && raw.engine === engine && raw.model === model;
+      if (!ours || !isRecord(raw.entries)) return {};
+      return Object.fromEntries(Object.entries(raw.entries).filter(([, e]) => isEntry(e)));
     } catch {
       return {};
     }
@@ -83,7 +115,8 @@ export function openCache(
   return {
     path,
     get(stateHash, question) {
-      return file.entries[entryKey(stateHash, question)]?.answer;
+      const answer = file.entries[entryKey(stateHash, question)]?.answer;
+      return answer?.kind === question.kind ? answer : undefined;
     },
     put(stateHash, question, answer, servedModel) {
       const entry = { answer, served: servedModel, at: now().toISOString() };

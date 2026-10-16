@@ -38,7 +38,7 @@ export interface RankedRow extends Scored {
   /** Sink fact gates that fired on this row, when it is neither pinned
    * nor held. */
   sunkBy: string[];
-  /** Criteria answered below the rubric's confidence floor. */
+  /** Weighted criteria answered below the rubric's confidence floor. */
   lowConfidence: string[];
 }
 
@@ -126,8 +126,10 @@ export function rank(rubric: Rubric, rows: readonly Scored[]): Ranking {
     heldBy.push(...factHolds);
     if (factHolds.length > 0 || (heldBy.length > 0 && pinnedBy.length === 0)) heldKeys.add(row.key);
     else if (pinnedBy.length === 0) sunkBy.push(...fired.filter((g) => g.action === "sink").map((g) => g.id));
+    // A zero-weight criterion adds nothing to the composite, so its
+    // confidence has nothing to warn about.
     const lowConfidence = rubric.criteria
-      .filter((c) => scoreOf(row, c).confidence < rubric.confidence_floor)
+      .filter((c) => c.weight > 0 && scoreOf(row, c).confidence < rubric.confidence_floor)
       .map((c) => c.id);
     return { ...row, composite: compositeOf(rubric, row), pinnedBy, heldBy, sunkBy, lowConfidence };
   });
