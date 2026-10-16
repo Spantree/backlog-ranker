@@ -3,7 +3,8 @@
  * Each takes a rubric (object or YAML path), a decision engine, an open
  * answer cache and its tickets (a list, or a tracker to read them from),
  * and returns what the CLI renders. Each flushes the cache before it
- * returns or throws.
+ * returns or throws; a flush failing beside a failed run never replaces
+ * the run's error.
  */
 
 import { readFileSync } from "node:fs";
@@ -88,6 +89,23 @@ function resolveRubric(opts: DecisionRunOptions & Pick<BacklogOptions, "weights"
   return opts.weights === undefined ? rubric : withWeights(rubric, opts.weights);
 }
 
+/** Flush after a failed run without hiding why it failed: the run's
+ * error is what the caller sees, and a flush that fails too is attached
+ * to it as a non-enumerable `flushError`. A flush that fails after a
+ * successful run throws as is. */
+function flushAfterFailure(cache: AnswerCache, err: unknown): void {
+  try {
+    cache.flush();
+  } catch (flushError) {
+    try {
+      if (typeof err === "object" && err !== null)
+        Object.defineProperty(err, "flushError", { value: flushError, configurable: true });
+    } catch {
+      // A frozen error keeps its own story; the flush failure is lost.
+    }
+  }
+}
+
 /** The given tickets, or the tracker's: exactly one source. */
 async function readTickets(
   opts: BacklogOptions,
@@ -107,6 +125,7 @@ export async function rankBacklog(opts: RankOptions): Promise<RankResult> {
   const rubric = resolveRubric(opts);
   const now = opts.now ?? (() => new Date());
   const concurrency = opts.concurrency === undefined ? {} : { concurrency: opts.concurrency };
+  let failed = false;
   try {
     const tickets = await readTickets(opts, (tracker) => tracker.pending());
     const { scored, states, stats } = await scoreTickets({
@@ -135,8 +154,12 @@ export async function rankBacklog(opts: RankOptions): Promise<RankResult> {
       stats,
       tiebreak: { ...result.stats, top: Math.min(top, result.rows.length) },
     };
+  } catch (err) {
+    failed = true;
+    flushAfterFailure(opts.cache, err);
+    throw err;
   } finally {
-    opts.cache.flush();
+    if (!failed) opts.cache.flush();
   }
 }
 
@@ -150,6 +173,7 @@ export async function calibrateBacklog(opts: CalibrateOptions): Promise<Calibrat
   if (opts.concurrency !== undefined) assertConcurrency(opts.concurrency);
   const rubric = resolveRubric(opts);
   const now = opts.now ?? (() => new Date());
+  let failed = false;
   try {
     const tickets = await readTickets(opts, (tracker) => tracker.issues(hand));
     const { scored, stats } = await scoreTickets({
@@ -168,8 +192,12 @@ export async function calibrateBacklog(opts: CalibrateOptions): Promise<Calibrat
     const spelled = new Map(tickets.map((t) => [t.key.toLowerCase(), t.key]));
     const handKeys = hand.map((k) => spelled.get(k.toLowerCase()) ?? k);
     return { rubric, calibration: kendallTau(handKeys, tool), tool, scored, ranking, stats };
+  } catch (err) {
+    failed = true;
+    flushAfterFailure(opts.cache, err);
+    throw err;
   } finally {
-    opts.cache.flush();
+    if (!failed) opts.cache.flush();
   }
 }
 
@@ -253,6 +281,7 @@ export interface ExplainResult {
 export async function explainTicket(opts: ExplainOptions): Promise<ExplainResult> {
   const rubric = resolveRubric(opts);
   const now = opts.now ?? (() => new Date());
+  let failed = false;
   try {
     let ticket: Ticket;
     if (opts.ticket !== undefined && opts.tracker === undefined && opts.key === undefined) {
@@ -348,7 +377,11 @@ export async function explainTicket(opts: ExplainOptions): Promise<ExplainResult
       },
       stats,
     };
+  } catch (err) {
+    failed = true;
+    flushAfterFailure(opts.cache, err);
+    throw err;
   } finally {
-    opts.cache.flush();
+    if (!failed) opts.cache.flush();
   }
 }

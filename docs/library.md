@@ -71,7 +71,7 @@ const tracker = linearTracker({ team: "ENG", apiKey: process.env.LINEAR_API_KEY 
 
 `trackerFor(source, options)` builds the tracker for a parsed `SourceRef`: `token` (the GitHub token or Linear API key), and optionally `tokenEnvVar`, `linearStates` and `fetch`.
 
-`openCache(projectRoot, engineId, model, now?)` opens `<projectRoot>/.backlog-ranker/cache/<engine>--<model>.json`. The facades flush it before they return or throw.
+`openCache(projectRoot, engineId, model, now?)` opens `<projectRoot>/.backlog-ranker/cache/<engine>--<model>.json`. The facades flush it before they return or throw. When a call fails and the flush fails too, the call's own error is thrown, with the flush failure attached as its `flushError`; a flush that fails after a successful call throws its own error.
 
 ## rankBacklog
 

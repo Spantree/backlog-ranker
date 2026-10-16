@@ -213,6 +213,38 @@ criteria:
     expect(warm.stats.requests).toBe(0);
   });
 
+  test("a failing flush never hides why a run failed, and still fails a run that succeeded", async () => {
+    const engine = stubEngine();
+    const diskFull = new Error("disk full");
+    const cache = {
+      ...openCache(tmp(), engine.id, engine.model),
+      flush() {
+        throw diskFull;
+      },
+    };
+    const down = new Error("tracker down");
+    const tracker: Tracker = {
+      source: "github:acme/app",
+      pending: async () => {
+        throw down;
+      },
+      issues: async () => {
+        throw down;
+      },
+    };
+    const run = { rubric: RUBRIC_PATH, engine, cache, now: () => NOW };
+    for (const call of [
+      () => rankBacklog({ ...run, tracker }),
+      () => calibrateBacklog({ ...run, tracker, hand: ["acme/app#1", "acme/app#2"] }),
+      () => explainTicket({ ...run, tracker, key: "acme/app#1" }),
+    ]) {
+      const err = await call().catch((e: unknown) => e);
+      expect(err).toBe(down);
+      expect((err as { flushError?: unknown }).flushError).toBe(diskFull);
+    }
+    await expect(rankBacklog({ ...run, tickets: TICKETS })).rejects.toBe(diskFull);
+  });
+
   test("a tie-break reorders the top unpinned rows and reports its own stats", async () => {
     const engine = stubEngine();
     const cache = openCache(tmp(), engine.id, engine.model);
