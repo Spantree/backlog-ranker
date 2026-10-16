@@ -1,8 +1,10 @@
 name: Release
 
-# Publishes package.json's version to npm. Run it by hand from main; npm
-# refuses a version that is already published. Authenticates with npm
-# trusted publishing (OIDC), so no npm token is stored in the repository.
+# Publishes package.json's version to npm, then tags it v<version> and
+# posts a GitHub release with notes from scripts/release-notes.sh. Run it
+# by hand from main; npm refuses a version that is already published.
+# Authenticates with npm trusted publishing (OIDC), so no npm token is
+# stored in the repository.
 
 on:
   workflow_dispatch:
@@ -29,3 +31,20 @@ jobs:
       - run: npm install -g npm@11.16.0 --ignore-scripts
       # prepack builds a clean dist/ first.
       - run: npm publish --loglevel verbose
+
+  # A separate job, so the write token never meets npm or install scripts.
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          scripts/release-notes.sh "$version" > notes.md
+          gh release create "v$version" --target "$GITHUB_SHA" --title "v$version" --notes-file notes.md

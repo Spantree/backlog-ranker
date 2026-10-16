@@ -3,8 +3,10 @@
 The package publishes to npm as `@feniix/backlog-ranker` through npm trusted publishing: no npm token exists anywhere, and every workflow release carries a provenance attestation.
 
 1. Bump `version` in `package.json` on a branch and merge it to `main`.
-2. Run `gh workflow run release.yml --ref main`. It re-runs the checks and the smoke test, then `npm publish --loglevel verbose`.
-3. Done when `npm view @feniix/backlog-ranker dist-tags --prefer-online` shows the new version as `latest`. The npmjs.com page lags the registry by minutes; trust the registry.
+2. Run `gh workflow run release.yml --ref main`. It re-runs the checks and the smoke test, then `npm publish --loglevel verbose`, then tags the commit `v<version>` and posts a GitHub release whose notes come from `scripts/release-notes.sh` (commits since the previous `v*` tag, grouped by conventional-commit type).
+3. Done when `npm view @feniix/backlog-ranker dist-tags --prefer-online` shows the new version as `latest` and `gh release view v<version>` shows the release. The npmjs.com page lags the registry by minutes; trust the registry.
+
+Commit subjects become the changelog, so write them as conventional commits (`feat:`, `fix:`, `docs:`; anything else lands under Other). If the npm publish succeeded but the release job failed, re-run only that job: `gh run rerun <run-id> --failed`.
 
 ## The npm side
 
