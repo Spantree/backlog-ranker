@@ -1,6 +1,6 @@
 {
   "name": "@feniix/backlog-ranker",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Rank, calibrate and explain a backlog with a rubric and a decision model",
   "license": "MIT",
   "author": "Sebastian Otaegui",
