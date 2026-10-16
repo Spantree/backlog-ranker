@@ -152,6 +152,14 @@ export async function calibrateBacklog(opts: CalibrateOptions): Promise<Calibrat
   const now = opts.now ?? (() => new Date());
   try {
     const tickets = await readTickets(opts, (tracker) => tracker.issues(hand));
+    // A hand key no ticket answers would silently drop out of tau's n:
+    // refused, as explain refuses a key the tracker did not return.
+    const read = new Set(tickets.map((t) => t.key.toLowerCase()));
+    const missing = hand.filter((k) => !read.has(k.toLowerCase()));
+    if (missing.length > 0) {
+      const from = opts.tracker === undefined ? "the tickets include" : "the tracker returned";
+      throw new RefusalError(`${from} no issue ${missing.join(", ")}`);
+    }
     const { scored, stats } = await scoreTickets({
       tickets,
       rubric,

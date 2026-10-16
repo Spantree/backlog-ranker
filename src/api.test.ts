@@ -371,6 +371,30 @@ describe("calibrateBacklog", () => {
     expect(engine.calls).toBe(0);
   });
 
+  test("refuses hand keys no ticket answers, naming them, before asking the engine", async () => {
+    const engine = stubEngine();
+    const cache = openCache(tmp(), engine.id, engine.model);
+    const hand = ["acme/app#1", "acme/app#404", "acme/app#2", "acme/app#405"];
+    // A tracker that drops a key it cannot find, and a ticket list without it.
+    const tracker: Tracker = {
+      source: "github:acme/app",
+      pending: async () => [],
+      issues: async (keys) => TICKETS.filter((t) => keys.includes(t.key)),
+    };
+    for (const [from, opts] of [
+      ["the tracker returned", { tracker }],
+      ["the tickets include", { tickets: TICKETS }],
+    ] as const) {
+      const err = await calibrateBacklog({ rubric: RUBRIC_PATH, ...opts, hand, engine, cache }).then(
+        () => undefined,
+        (e: unknown) => e,
+      );
+      expect(isRefusal(err)).toBe(true);
+      expect((err as Error).message).toBe(`${from} no issue acme/app#404, acme/app#405`);
+    }
+    expect(engine.calls).toBe(0);
+  });
+
   test("hand keys count whatever their case, under the tracker's spelling", async () => {
     const engine = stubEngine();
     const tracker: Tracker = {
