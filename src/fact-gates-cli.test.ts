@@ -169,9 +169,19 @@ describe("explain with fact gates", () => {
     expect(text).toContain("Flags: sunk:blocked.");
   });
 
-  test("a pinned ticket's fired sink reads as overridden by the pin", async () => {
+  test("a pinned ticket's fired sink and model-gate hold read as overridden by the pin", async () => {
     expect(await explain("kit/kit#5")).toBe(0);
-    expect(cap.stdout()).toContain("fact gate blocked (open_blockers, sink): 2 ≥ 1: no effect (pinned)");
+    const text = cap.stdout();
+    expect(text).toContain("gate security (pin_top): 0.90 ≥ 0.50: pinned");
+    expect(text).toContain("gate judgeable (flag_if_below): 0.20 < 0.50: no effect (pinned)");
+    expect(text).toContain("fact gate blocked (open_blockers, sink): 2 ≥ 1: no effect (pinned)");
+  });
+
+  test("a fact-held ticket's fired pin reads as overridden by the hold", async () => {
+    expect(await explain("kit/kit#4")).toBe(0);
+    const text = cap.stdout();
+    expect(text).toContain("gate security (pin_top): 0.90 ≥ 0.50: no effect (held)");
+    expect(text).toContain("fact gate in_progress (open_closing_prs, hold): 1 ≥ 1: held");
   });
 
   test("--json carries facts and factGates", async () => {
@@ -179,6 +189,7 @@ describe("explain with fact gates", () => {
     const json = JSON.parse(cap.stdout()) as {
       facts: Record<string, unknown>;
       factGates: unknown[];
+      gates: unknown[];
       flags: Record<string, unknown>;
     };
     expect(json.facts).toMatchObject({ open_blockers: 0, open_closing_prs: 1, assignees: 0 });
@@ -190,6 +201,14 @@ describe("explain with fact gates", () => {
       value: 1,
       fired: true,
       outcome: "held",
+    });
+    expect(json.gates).toContainEqual({
+      id: "security",
+      action: "pin_top",
+      threshold: 0.5,
+      probability: 0.9,
+      triggered: true,
+      outcome: "overridden by hold",
     });
     expect(json.flags).toMatchObject({ pinnedBy: ["security"], heldBy: ["in_progress"], sunkBy: [] });
   });

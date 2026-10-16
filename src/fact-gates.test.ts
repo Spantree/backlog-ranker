@@ -258,10 +258,14 @@ describe("fact gates in explainTicket", () => {
     expect(result.flags).toMatchObject({ sunkBy: ["blocked"], heldBy: [] });
   });
 
-  test("a pinned ticket's fired sink has no effect; its fired hold holds it", async () => {
+  test("a fact-held ticket's fired pin and sink are overridden by the hold", async () => {
     const pinnedBlocked = await explain(ticket(1, "token in a log", { openBlockers: 1, openClosingPrs: 1 }));
+    expect(pinnedBlocked.gates.map((g) => [g.id, g.triggered, g.outcome])).toEqual([
+      ["security", true, "overridden by hold"],
+      ["judgeable", false, "none"],
+    ]);
     expect(pinnedBlocked.factGates.map((g) => [g.id, g.fired, g.outcome])).toEqual([
-      ["blocked", true, "none"],
+      ["blocked", true, "overridden by hold"],
       ["in_progress", true, "held"],
     ]);
     expect(pinnedBlocked.flags).toMatchObject({
@@ -269,5 +273,30 @@ describe("fact gates in explainTicket", () => {
       heldBy: ["in_progress"],
       sunkBy: [],
     });
+  });
+
+  test("a pinned ticket's fired sink and model-gate hold are overridden by the pin", async () => {
+    const result = await explain(ticket(1, "vague leak", { openBlockers: 1 }));
+    expect(result.gates.map((g) => [g.id, g.triggered, g.outcome])).toEqual([
+      ["security", true, "pinned"],
+      ["judgeable", true, "overridden by pin"],
+    ]);
+    expect(result.factGates.map((g) => [g.id, g.fired, g.outcome])).toEqual([
+      ["blocked", true, "overridden by pin"],
+      ["in_progress", false, "none"],
+    ]);
+  });
+
+  test("a model-held ticket's fired sink is overridden by the hold", async () => {
+    const result = await explain(ticket(1, "something vague", { openBlockers: 1 }));
+    expect(result.gates.map((g) => [g.id, g.outcome])).toEqual([
+      ["security", "none"],
+      ["judgeable", "held"],
+    ]);
+    expect(result.factGates.map((g) => [g.id, g.outcome])).toEqual([
+      ["blocked", "overridden by hold"],
+      ["in_progress", "none"],
+    ]);
+    expect(result.flags).toMatchObject({ heldBy: ["judgeable"], sunkBy: [] });
   });
 });

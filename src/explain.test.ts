@@ -132,8 +132,8 @@ describe("explain", () => {
       expect(Math.abs(c.levels.reduce((s, l) => s + l.probability, 0) - 1)).toBeLessThan(1e-6);
     }
     expect(json.gates).toMatchObject([
-      { id: "security", action: "pin_top", threshold: 0.5, triggered: true },
-      { id: "judgeable", action: "flag_if_below", threshold: 0.5, triggered: false },
+      { id: "security", action: "pin_top", threshold: 0.5, triggered: true, outcome: "pinned" },
+      { id: "judgeable", action: "flag_if_below", threshold: 0.5, triggered: false, outcome: "none" },
     ]);
     expect(json.stats.requests).toBe(1);
   });

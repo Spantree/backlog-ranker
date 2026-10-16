@@ -5,7 +5,7 @@
  * its threshold, and why a row is pinned, held, sunk or flagged.
  */
 
-import type { CalibrateResult, ExplainResult } from "./api.js";
+import type { CalibrateResult, ExplainedFactGate, ExplainedGate, ExplainResult } from "./api.js";
 import type { RankedRow, Ranking } from "./compose.js";
 import { TRUST_MIN_TICKETS, TRUST_TAU } from "./kendall.js";
 import type { Rubric } from "./rubric.js";
@@ -130,6 +130,15 @@ export function renderTable(opts: {
   return lines.join("\n");
 }
 
+/** A gate's outcome as explain prints it: one precedence overrode did
+ * nothing, and says what overrode it. */
+function outcomeText(outcome: ExplainedGate["outcome"] | ExplainedFactGate["outcome"]): string {
+  if (outcome === "none") return "no effect";
+  if (outcome === "overridden by hold") return "no effect (held)";
+  if (outcome === "overridden by pin") return "no effect (pinned)";
+  return outcome;
+}
+
 /** One ticket's reasoning: its facts, each criterion as a distribution
  * over its levels, each gate against its threshold, each fact gate
  * against its at_least, and the flags they raise. */
@@ -160,22 +169,15 @@ export function renderExplain(opts: { header: RunHeader; result: ExplainResult }
   lines.push("");
   for (const g of result.gates) {
     const sign = g.probability >= g.threshold ? "≥" : "<";
-    const outcome = !g.triggered ? "no effect" : g.action === "pin_top" ? "pinned" : "held";
     lines.push(
-      `gate ${g.id} (${g.action}): ${g.probability.toFixed(2)} ${sign} ${g.threshold.toFixed(2)}: ${outcome}`,
+      `gate ${g.id} (${g.action}): ${g.probability.toFixed(2)} ${sign} ${g.threshold.toFixed(2)}: ${outcomeText(g.outcome)}`,
     );
   }
   for (const g of result.factGates) {
     const sign = g.fired ? "≥" : "<";
-    const outcome =
-      g.outcome === "held"
-        ? "held"
-        : g.outcome === "sunk"
-          ? "sunk"
-          : g.fired
-            ? "no effect (pinned)"
-            : "no effect";
-    lines.push(`fact gate ${g.id} (${g.fact}, ${g.action}): ${g.value} ${sign} ${g.atLeast}: ${outcome}`);
+    lines.push(
+      `fact gate ${g.id} (${g.fact}, ${g.action}): ${g.value} ${sign} ${g.atLeast}: ${outcomeText(g.outcome)}`,
+    );
   }
   const shown = flagList(result.flags);
   lines.push(
