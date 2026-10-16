@@ -12,7 +12,7 @@ import { factGateFires, type Ranking, rank, type Scored } from "./compose.js";
 import type { DecisionEngine } from "./engine.js";
 import { RefusalError } from "./errors.js";
 import { type Calibration, kendallTau } from "./kendall.js";
-import { type FactGate, type Gate, parseRubric, type Rubric, withWeights } from "./rubric.js";
+import { type FactGate, type Gate, parseRubric, type Rubric, RubricError, withWeights } from "./rubric.js";
 import { assertConcurrency, type ScoreStats, scoreTickets } from "./score.js";
 import type { AgeBucket, TicketState } from "./state.js";
 import { type Ticket, type TicketFacts, ticketFacts } from "./ticket.js";
@@ -71,11 +71,20 @@ export interface CalibrateResult {
   stats: ScoreStats;
 }
 
+/** A rubric file's text. A relative path resolves against the working
+ * directory; a missing file is a refusal worded as the CLI's. */
+function readRubricFile(path: string): string {
+  try {
+    return readFileSync(path, "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") throw new RubricError(`no rubric file ${path}`);
+    throw err;
+  }
+}
+
 function resolveRubric(opts: DecisionRunOptions & Pick<BacklogOptions, "weights">): Rubric {
   const rubric =
-    typeof opts.rubric === "string"
-      ? parseRubric(readFileSync(opts.rubric, "utf8"), opts.rubric)
-      : opts.rubric;
+    typeof opts.rubric === "string" ? parseRubric(readRubricFile(opts.rubric), opts.rubric) : opts.rubric;
   return opts.weights === undefined ? rubric : withWeights(rubric, opts.weights);
 }
 
@@ -133,7 +142,10 @@ export async function rankBacklog(opts: RankOptions): Promise<RankResult> {
 
 export async function calibrateBacklog(opts: CalibrateOptions): Promise<CalibrateResult> {
   const hand = [...opts.hand];
-  if (new Set(hand).size !== hand.length) throw new RefusalError("the hand ranking lists a key twice");
+  // Trackers read keys case-insensitively, so two spellings of one key are one key.
+  if (new Set(hand.map((k) => k.toLowerCase())).size !== hand.length) {
+    throw new RefusalError("the hand ranking lists a key twice");
+  }
   if (hand.length < 2) throw new RefusalError("the hand ranking needs at least two issue keys, best first");
   if (opts.concurrency !== undefined) assertConcurrency(opts.concurrency);
   const rubric = resolveRubric(opts);
@@ -151,7 +163,11 @@ export async function calibrateBacklog(opts: CalibrateOptions): Promise<Calibrat
     const ranking = rank(rubric, scored);
     // Held rows rank after every kept row: the tool would not put them mid-ranking.
     const tool = [...ranking.ranked, ...ranking.held].map((r) => r.key);
-    return { rubric, calibration: kendallTau(hand, tool), tool, scored, ranking, stats };
+    // Each hand key as the tracker spells it (`ACME/app#12` is `acme/app#12`),
+    // so a key in another case still counts toward tau.
+    const spelled = new Map(tickets.map((t) => [t.key.toLowerCase(), t.key]));
+    const handKeys = hand.map((k) => spelled.get(k.toLowerCase()) ?? k);
+    return { rubric, calibration: kendallTau(handKeys, tool), tool, scored, ranking, stats };
   } finally {
     opts.cache.flush();
   }

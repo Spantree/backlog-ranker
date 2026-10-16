@@ -30,7 +30,7 @@ console.log("held:", result.ranking.held.map((row) => row.key));
 console.log(result.stats.requests, "requests,", result.stats.cachedAnswers, "answers from cache");
 ```
 
-`Project` carries `projectRoot`, `configPath`, `config`, `sources`, `allowlistKey`, `backend`, `engine()` and `tracker(source)`. `engine()` refuses when the backend's key variable is unset. `tracker()` refuses, in order, a source not on the allowlist (with the same wording as `assertAllowed`) and an unset key variable for the source's tracker (`keys.github` for a `github:` source, `keys.linear` for a `linear:` one); a Linear tracker gets the config's `linear.states`. `LoadOptions` takes `allowOnce` (a `SourceRef` admitted for this project object only), `backend` and `fetch` (a replacement for the global fetch, used by tests).
+`Project` carries `projectRoot`, `configPath`, `config`, `sources`, `allowlistKey`, `backend`, `engine()` and `tracker(source)`. `engine()` refuses when the backend's key variable is unset. `assertAllowed` and `tracker()` decide on what the tracker will read: the ref's `owner` and `repo` (or `team`), canonicalised by `sourceSpec(ref)` and matched case-insensitively, never the ref's own `spec` string. `tracker()` refuses, in order, a source not on the allowlist (with the same wording as `assertAllowed`) and an unset key variable for the source's tracker (`keys.github` for a `github:` source, `keys.linear` for a `linear:` one); a Linear tracker gets the config's `linear.states`. `LoadOptions` takes `allowOnce` (a `SourceRef` admitted for this project object only), `backend` and `fetch` (a replacement for the global fetch, used by tests).
 
 ## Building the pieces yourself
 
@@ -75,13 +75,13 @@ const tracker = linearTracker({ team: "ENG", apiKey: process.env.LINEAR_API_KEY 
 
 ## rankBacklog
 
-Takes `rubric` (a parsed `Rubric` or a YAML file path), exactly one of `tickets` and `tracker`, `engine`, `cache`, and optionally `now` (the clock that buckets ages), `weights`, `concurrency` (a whole number of at least 1, default 8) and `tiebreak` (1 to 10). Returns `rubric` (as applied, overrides included), `ranking` (`ranked` rows, pinned then normal then sunk, and `held` rows), `states` (each issue's state as sent, by key), `stats`, and `tiebreak` stats when asked.
+Takes `rubric` (a parsed `Rubric` or a YAML file path; a relative path resolves against the working directory, and a missing file refuses with a `RubricError`, "no rubric file <path>"), exactly one of `tickets` and `tracker`, `engine`, `cache`, and optionally `now` (the clock that buckets ages), `weights`, `concurrency` (a whole number of at least 1, default 8) and `tiebreak` (1 to 10). Returns `rubric` (as applied, overrides included), `ranking` (`ranked` rows, pinned then normal then sunk, and `held` rows), `states` (each issue's state as sent, by key), `stats`, and `tiebreak` stats when asked.
 
 Each row (`RankedRow`) carries `key`, `title`, `url`, `composite`, `answers`, `facts` (the numeric facts fact gates read, by rubric name), `pinnedBy`, `heldBy` (`flag_if_below` gates and `hold` fact gates), `sunkBy` (`sink` fact gates, on rows neither pinned nor held), `lowConfidence` and `truncated`. Fact gates never send a request and never change a cache key; see [rubrics.md](rubrics.md#fact-gates) for their precedence over pins and holds.
 
 ## calibrateBacklog
 
-Takes the same options as `rankBacklog` without `tiebreak`, plus `hand`: issue keys best first, exactly as the tracker spells them (`acme/app#12`, `ENG-12`). With a tracker it reads only those issues.
+Takes the same options as `rankBacklog` without `tiebreak`, plus `hand`: issue keys best first (`acme/app#12`, `ENG-12`), in any case: each is matched to the issue read for it case-insensitively and counted under the tracker's spelling, so `ACME/app#12` counts as `acme/app#12`, and two spellings of one key are refused as a repeat. With a tracker it reads only those issues.
 
 ```ts
 import { calibrateBacklog, type DecisionEngine, type AnswerCache, type Tracker } from "backlog-ranker";
@@ -226,4 +226,4 @@ try {
 
 ## Building blocks
 
-Also exported: `parseRubric`, `loadRubric`, `loadRubricFile`, `withWeights`, `rubricHash`; `scoreTickets`, `pool`; `rank`, `compositeOf`, `rubricQuestions`; `FACT_NAMES`, `ticketFacts`; `tiebreak`, `MAX_TIEBREAK`; `kendallTau`; `toState`, `stateHash`, `canonicalJson` and the prompt budget helpers; `parseSource`, `parseIssueKey` (`owner/repo#123` or `TEAM-123`), `issueKeyIn`, `assertAllowed`; `loadConfig`, `parseConfig`, `configSchema`, `findProjectRoot`; `BACKENDS`, `JEV_MODELS`, `DEFAULT_JEV_MODEL`; `renderTable`, `renderExplain`.
+Also exported: `parseRubric`, `loadRubric`, `loadRubricFile`, `withWeights`, `rubricHash`; `scoreTickets`, `pool`; `rank`, `compositeOf`, `rubricQuestions`; `FACT_NAMES`, `ticketFacts`; `tiebreak`, `MAX_TIEBREAK`; `kendallTau`; `toState`, `stateHash`, `canonicalJson` and the prompt budget helpers; `parseSource`, `parseIssueKey` (`owner/repo#123` or `TEAM-123`), `issueKeyIn`, `sourceSpec`, `assertAllowed`; `loadConfig`, `parseConfig`, `configSchema`, `findProjectRoot`; `BACKENDS`, `JEV_MODELS`, `DEFAULT_JEV_MODEL`; `renderTable`, `renderExplain`.

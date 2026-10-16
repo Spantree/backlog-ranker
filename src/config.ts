@@ -85,13 +85,21 @@ export class ConfigError extends RefusalError {
   }
 }
 
-/** The nearest ancestor of `start` holding `.backlog-ranker/` or
- * `.git`, both markers checked per directory; `start` itself if none. */
+/** What marks a project root inside `.backlog-ranker/`: a config file or
+ * the rubrics directory. A cache directory alone is not one, so the cache
+ * a first `--allow-once` run writes outside any project never makes its
+ * working directory a root for later runs. */
+const ROOT_MARKERS = [CONFIG_PATH, LOCAL_CONFIG_PATH, join(CONFIG_DIR, "rubrics")];
+
+/** The nearest ancestor of `start` holding `.backlog-ranker/config.yaml`,
+ * `config.local.yaml` or `rubrics/`, or `.git`, all markers checked per
+ * directory; `start` itself if none. */
 export function findProjectRoot(start: string): string {
   const origin = resolve(start);
   let dir = origin;
   for (;;) {
-    if (existsSync(join(dir, CONFIG_DIR)) || existsSync(join(dir, ".git"))) return dir;
+    const marked = ROOT_MARKERS.some((marker) => existsSync(join(dir, marker)));
+    if (marked || existsSync(join(dir, ".git"))) return dir;
     const parent = dirname(dir);
     if (parent === dir) return origin;
     dir = parent;

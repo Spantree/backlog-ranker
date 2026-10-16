@@ -44,9 +44,20 @@ export function parseSource(spec: string): SourceRef {
   );
 }
 
+/** The canonical spec of what `source`'s tracker will read, derived from
+ * its fields (`owner`/`repo` or `team`), never from its `spec` string, so a
+ * hand-built ref cannot name one backlog and read another. Refuses fields
+ * the source grammar would not accept. */
+export function sourceSpec(source: SourceRef): string {
+  const fields = source.kind === "github" ? `github:${source.owner}/${source.repo}` : `linear:${source.team}`;
+  return parseSource(fields).spec;
+}
+
 /** The allowlist check. Runs before any tracker or engine request.
+ * Decides on {@link sourceSpec}, ignoring the ref's own `spec`.
  * `settingsKey` names where the allowlist lives, for the remediation. */
 export function assertAllowed(source: SourceRef, allowlist: readonly string[], settingsKey: string): void {
+  const spec = sourceSpec(source);
   const allowed = new Set<string>();
   for (const entry of allowlist) {
     try {
@@ -56,11 +67,11 @@ export function assertAllowed(source: SourceRef, allowlist: readonly string[], s
       // at load, so this only guards direct callers.
     }
   }
-  if (allowed.has(source.spec)) return;
+  if (allowed.has(spec)) return;
   const listed = allowed.size === 0 ? "it lists no sources" : `it lists ${[...allowed].join(", ")}`;
   throw new SourceError(
-    `${source.spec} is not on the backlog source allowlist (${settingsKey}; ${listed}). ` +
-      `No request was sent. To rank this backlog, add "${source.spec}" to ${settingsKey}, ` +
+    `${spec} is not on the backlog source allowlist (${settingsKey}; ${listed}). ` +
+      `No request was sent. To rank this backlog, add "${spec}" to ${settingsKey}, ` +
       `so the decision to send its tickets to the decision engine is reviewed like any ` +
       `other settings change.`,
   );

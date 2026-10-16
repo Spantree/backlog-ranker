@@ -40,7 +40,7 @@ Flags: `pinned:<gate>`, `held:<gate>` (a `flag_if_below` gate or a `hold` fact g
 
 - A `github:<owner>/<repo>` source ranks every open issue of the repository (pull requests are never included); keys look like `acme/app#42`.
 - A `linear:<TEAM>` source ranks the team's issues in the workflow states `linear.states` names, Backlog and Todo by default (see [config.md](config.md#linear-states)); keys are Linear identifiers such as `ENG-42`. The team key is case-insensitive and printed uppercase.
-- `--rubric` takes a name, resolved as `.backlog-ranker/rubrics/<name>.local.yaml` then `<name>.yaml`, or a file path (contains `/` or ends in `.yaml`/`.yml`). A relative path resolves against the project root (the nearest directory holding `.backlog-ranker/` or `.git`), or the working directory when there is none. `calibrate` and `explain` take `--rubric` the same way.
+- `--rubric` takes a name, resolved as `.backlog-ranker/rubrics/<name>.local.yaml` then `<name>.yaml`, or a file path (contains `/` or ends in `.yaml`/`.yml`). A relative path resolves against the project root (the nearest directory holding a `.backlog-ranker/` config or rubrics, or `.git`; see [config.md](config.md#project-root)), or the working directory when there is none. `calibrate` and `explain` take `--rubric` the same way.
 - `--weight <criterion>=<number>` may repeat; the last value for a criterion wins. It never sends a new request.
 - `--tiebreak` takes 1 to 10. Asks pairwise questions over the top rows; see [rubrics.md](rubrics.md#tie-break).
 - `--concurrency` takes a whole number of at least 1. Default 8.
@@ -103,8 +103,8 @@ backlog-ranker explain -r impact-roi ENG-42
 
 | Code | Meaning |
 | --- | --- |
-| 0 | Success, or `--help` (printed on stdout) |
-| 1 | A refusal or an error: usage, config, allowlist, missing key, GitHub, Linear or backend failure. Printed on stderr |
+| 0 | Success, or `--help` (printed on stdout), or the reader closed the output pipe early (`backlog-ranker rank ... \| head`): the run stops quietly at the first write that finds the pipe closed |
+| 1 | A refusal or an error: usage, config, allowlist, missing key, GitHub, Linear or backend failure, or any other failure to write the output. Printed on stderr |
 | 2 | `calibrate` only: the rubric is not trusted |
 
 ## Errors and BACKLOG_RANKER_DEBUG

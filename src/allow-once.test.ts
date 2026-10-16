@@ -165,6 +165,26 @@ describe("rank --allow-once", () => {
     expect(counts.jev).toBe(6);
   });
 
+  test("the cache a first run writes outside any project never makes its directory a project root", async () => {
+    const work = join(root, "work");
+    mkdirSync(work);
+    const net = replayFetch();
+    const io: CliIo = { stdout: () => {}, stderr: (text) => void err.push(text), env: ENV };
+    const rankIn = (cwd: string, ...argv: string[]) =>
+      run(["rank", ...argv], io, {
+        resolve: (dir, env, options) => loadProject(dir, env, { ...options, fetch: net.fetch }),
+        cwd: () => cwd,
+        now: () => FIXTURE_NOW,
+      });
+    const once = ["-r", RUBRIC_FILE, "-s", "github:kit/kit", "--allow-once", "--backend", "openrouter"];
+    expect(await rankIn(work, ...once)).toBe(0);
+    expect(readdirSync(join(work, ".backlog-ranker"))).toEqual(["cache"]);
+    // A project config later committed above it is found from the same directory.
+    writeConfig("sources:\n  - github:kit/kit\nbackend: openrouter\n");
+    expect(loadProject(work, ENV).projectRoot).toBe(root);
+    expect(await rankIn(work, "-r", RUBRIC_FILE, "-s", "github:kit/kit")).toBe(0);
+  });
+
   test("a missing rubric file refuses naming it", async () => {
     expect(
       await rank("-r", "./nope.yaml", "-s", "github:kit/kit", "--allow-once", "--backend", "openrouter"),

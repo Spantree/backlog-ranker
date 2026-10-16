@@ -92,6 +92,7 @@ export {
   parseSource,
   SourceError,
   type SourceRef,
+  sourceSpec,
 } from "./source.js";
 export {
   AGE_BUCKETS,

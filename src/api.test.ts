@@ -6,7 +6,7 @@ import { calibrateBacklog, explainTicket, rankBacklog } from "./api.js";
 import { openCache } from "./cache.js";
 import type { DecisionAnswer, DecisionEngine } from "./engine.js";
 import { isRefusal } from "./errors.js";
-import { parseRubric } from "./rubric.js";
+import { parseRubric, RubricError } from "./rubric.js";
 import { scoreTickets } from "./score.js";
 import type { Ticket } from "./ticket.js";
 import type { Tracker } from "./trackers/tracker.js";
@@ -254,6 +254,33 @@ criteria:
     }
     expect(engine.calls).toBe(0);
   });
+
+  test("a missing rubric file is a RubricError refusal, as the CLI words it", async () => {
+    const engine = stubEngine();
+    const cache = openCache(tmp(), engine.id, engine.model);
+    const missing = join(tmp(), "nope.yaml");
+    for (const run of [
+      () => rankBacklog({ rubric: missing, tickets: TICKETS, engine, cache }),
+      () =>
+        calibrateBacklog({
+          rubric: missing,
+          tickets: TICKETS,
+          hand: ["acme/app#1", "acme/app#2"],
+          engine,
+          cache,
+        }),
+      () => explainTicket({ rubric: missing, ticket: TICKETS[0] as Ticket, engine, cache }),
+    ]) {
+      const err = await run().then(
+        () => undefined,
+        (e: unknown) => e,
+      );
+      expect(isRefusal(err)).toBe(true);
+      expect(err).toBeInstanceOf(RubricError);
+      expect((err as Error).message).toBe(`no rubric file ${missing}`);
+    }
+    expect(engine.calls).toBe(0);
+  });
 });
 
 describe("concurrency", () => {
@@ -334,7 +361,7 @@ describe("calibrateBacklog", () => {
   test("refuses a hand list with a key twice or fewer than two keys", async () => {
     const engine = stubEngine();
     const cache = openCache(tmp(), engine.id, engine.model);
-    for (const hand of [["acme/app#1", "acme/app#1"], ["acme/app#1"]]) {
+    for (const hand of [["acme/app#1", "acme/app#1"], ["acme/app#1", "ACME/App#1"], ["acme/app#1"]]) {
       const err = await calibrateBacklog({ rubric: RUBRIC_PATH, tickets: TICKETS, hand, engine, cache }).then(
         () => undefined,
         (e: unknown) => e,
@@ -342,6 +369,36 @@ describe("calibrateBacklog", () => {
       expect(isRefusal(err)).toBe(true);
     }
     expect(engine.calls).toBe(0);
+  });
+
+  test("hand keys count whatever their case, under the tracker's spelling", async () => {
+    const engine = stubEngine();
+    const tracker: Tracker = {
+      source: "github:acme/app",
+      pending: async () => {
+        throw new Error("calibrate never reads the whole backlog");
+      },
+      // As the GitHub tracker does: keys in any case, returned as it spells them.
+      issues: async (keys) =>
+        keys.map((k) => {
+          const found = TICKETS.find((t) => t.key.toLowerCase() === k.toLowerCase());
+          if (found === undefined) throw new Error(`no issue ${k}`);
+          return found;
+        }),
+    };
+    const result = await calibrateBacklog({
+      rubric: RUBRIC_PATH,
+      tracker,
+      hand: ["ACME/app#1", "Acme/App#2", "acme/app#3", "acme/APP#4"],
+      engine,
+      cache: openCache(tmp(), engine.id, engine.model),
+      now: () => NOW,
+    });
+    expect(result.calibration).toMatchObject({ n: 4, concordant: 4, discordant: 2 });
+    expect(result.calibration.disagreements).toEqual([
+      { above: "acme/app#1", below: "acme/app#3" },
+      { above: "acme/app#2", below: "acme/app#3" },
+    ]);
   });
 });
 

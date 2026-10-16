@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { findProjectRoot } from "./config.js";
 import { isRefusal } from "./errors.js";
 import { replayFetch } from "./fixtures/replay.js";
 import { loadProject } from "./loader.js";
@@ -122,6 +123,27 @@ describe("loadProject", () => {
     expect(loadProject(deep, {}).projectRoot).toBe(root);
   });
 
+  test.each([
+    ["config.yaml", "config.yaml"],
+    ["config.local.yaml", "config.local.yaml"],
+    ["rubrics/", "rubrics/impact-roi.yaml"],
+  ])(".backlog-ranker/%s marks a project root", (_, file) => {
+    const inner = join(root, "inner");
+    const path = join(inner, ".backlog-ranker", file);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, "sources: []\nbackend: typesafe\n");
+    mkdirSync(join(inner, "src"));
+    expect(findProjectRoot(join(inner, "src"))).toBe(inner);
+  });
+
+  test("a .backlog-ranker/ holding only a cache is not a root marker", () => {
+    writeConfig("config.yaml", "sources: []\nbackend: typesafe\n");
+    const inner = join(root, "work");
+    mkdirSync(join(inner, ".backlog-ranker", "cache"), { recursive: true });
+    expect(findProjectRoot(inner)).toBe(root);
+    expect(loadProject(inner, {}).projectRoot).toBe(root);
+  });
+
   test("the walk stops at the nearest .git, so an outer config is not borrowed", () => {
     writeConfig("config.yaml", "sources: []\nbackend: typesafe\n");
     const inner = join(root, "vendor", "repo");
@@ -182,6 +204,36 @@ describe("loadProject", () => {
     expect(err.message).toContain("github:other/repo is not on the backlog source allowlist");
     expect(err.message).toContain("No request was sent");
     expect(err.message).not.toContain("GITHUB_TOKEN");
+  });
+
+  test("tracker() decides on the ref's owner and repo, never the caller's spec string", () => {
+    writeConfig("config.yaml", "sources:\n  - github:acme/app\nbackend: typesafe\n");
+    const project = loadProject(root, { GITHUB_TOKEN: "t" });
+    const forged = { kind: "github" as const, owner: "evil", repo: "secret", spec: "github:acme/app" };
+    const err = refusal(() => project.tracker(forged));
+    expect(err.message).toStartWith("github:evil/secret is not on the backlog source allowlist");
+    const cased = { kind: "github" as const, owner: "Acme", repo: "App", spec: "github:Acme/App" };
+    expect(project.tracker(cased).source).toBe("github:acme/app");
+  });
+
+  test("tracker() decides on a Linear ref's team, never the caller's spec string", () => {
+    writeConfig("config.yaml", "sources:\n  - linear:KIT\nbackend: typesafe\n");
+    const project = loadProject(root, { LINEAR_API_KEY: "k" });
+    const forged = { kind: "linear" as const, team: "OPS", spec: "linear:KIT" };
+    expect(refusal(() => project.tracker(forged)).message).toStartWith(
+      "linear:OPS is not on the backlog source allowlist",
+    );
+    expect(project.tracker({ kind: "linear", team: "kit", spec: "linear:kit" }).source).toBe("linear:KIT");
+  });
+
+  test("--allow-once admits the source its ref's fields name, not its spec string", () => {
+    writeConfig("config.yaml", "sources: []\nbackend: typesafe\n");
+    const forged = { kind: "github" as const, owner: "evil", repo: "secret", spec: "github:acme/app" };
+    const project = loadProject(root, { GITHUB_TOKEN: "t" }, { allowOnce: forged });
+    expect(project.sources).toEqual(["github:evil/secret"]);
+    expect(refusal(() => project.tracker(parseSource("github:acme/app"))).message).toContain(
+      "not on the backlog source allowlist",
+    );
   });
 
   test("the allowlist refusal names config.yaml when that is the file read", () => {
