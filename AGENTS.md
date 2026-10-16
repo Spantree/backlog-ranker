@@ -33,7 +33,7 @@ CI (`.github/workflows/ci.yml`) runs these on every pull request and push to `ma
 
 ## Releasing
 
-The package publishes to npm as `@feniix/backlog-ranker`. To release: bump `version` in `package.json` on a branch, merge to `main`, then run the **Release** workflow (`.github/workflows/release.yml`) by hand from `main`. It re-runs the checks and the smoke test, then `npm publish`; npm refuses a version already published. It authenticates with npm trusted publishing, so no npm token is stored. While the repository is private, npm attaches no provenance attestation.
+The package publishes to npm as `@feniix/backlog-ranker`. To release: bump `version` in `package.json` on a branch, merge to `main`, then run the **Release** workflow (`.github/workflows/release.yml`) by hand from `main`. It re-runs the checks and the smoke test, then `npm publish`; npm refuses a version already published. It authenticates with npm trusted publishing, so no npm token is stored. npm attaches a provenance attestation linking each version to the commit and workflow run that built it; the first, hand-published version has none.
 
 One-time setup, by the owner of the `@feniix` npm scope:
 
