@@ -146,4 +146,21 @@ describe("built bin: large piped output drains before exit", () => {
       expect(stderr.trimEnd().endsWith("(BACKLOG_RANKER_DEBUG=1 for a stack)")).toBe(true);
     });
   }
+
+  /** A reader that stops early (`| head`) closes the pipe while the run
+   * still writes: the next write fails with EPIPE, which must end the run
+   * quietly with exit 0, not crash with an unhandled 'error' event. */
+  for (const runtime of ["node", "bun"]) {
+    test(`under ${runtime}, a reader closing the pipe early exits 0 without a stack`, () => {
+      const script =
+        `"$0" "$1" rank -r x -s github:a/b 2>&1 >/dev/null | head -c 64 >/dev/null; ` +
+        `echo "status=\${PIPESTATUS[0]}"`;
+      const proc = Bun.spawnSync(["bash", "-c", script, runtime, bin], {
+        cwd: project,
+        env: { ...process.env },
+      });
+      expect(proc.stdout.toString().trim()).toBe("status=0");
+      expect(proc.stderr.toString()).toBe("");
+    });
+  }
 });

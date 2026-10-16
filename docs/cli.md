@@ -103,8 +103,8 @@ backlog-ranker explain -r impact-roi ENG-42
 
 | Code | Meaning |
 | --- | --- |
-| 0 | Success, or `--help` (printed on stdout) |
-| 1 | A refusal or an error: usage, config, allowlist, missing key, GitHub, Linear or backend failure. Printed on stderr |
+| 0 | Success, or `--help` (printed on stdout), or the reader closed the output pipe early (`backlog-ranker rank ... \| head`): the run stops quietly at the first write that finds the pipe closed |
+| 1 | A refusal or an error: usage, config, allowlist, missing key, GitHub, Linear or backend failure, or any other failure to write the output. Printed on stderr |
 | 2 | `calibrate` only: the rubric is not trusted |
 
 ## Errors and BACKLOG_RANKER_DEBUG
