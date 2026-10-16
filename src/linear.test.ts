@@ -389,6 +389,99 @@ describe("issues(keys)", () => {
   });
 });
 
+describe("nested counts", () => {
+  const more = (endCursor: string) => ({ hasNextPage: true, endCursor });
+  const last = { hasNextPage: false, endCursor: null };
+  const related = (n: number) => Array.from({ length: n }, () => ({ type: "related" }));
+  const rest = (connection: Record<string, unknown>) => () => Response.json({ data: { issue: connection } });
+
+  test("asks every nested connection for its page info, adding no other field", async () => {
+    const linear = fakeLinear(pageOf());
+    await linearTracker({ team: "EVA", apiKey: "k", fetch: linear.fetch }).pending();
+    const query = linear.sent[1]?.query.replace(/\s+/g, " ") ?? "";
+    expect(query).toContain("labels(first: 100) { pageInfo { hasNextPage endCursor } nodes { name } }");
+    expect(query).toContain("relations(first: 100) { pageInfo { hasNextPage endCursor } nodes { type } }");
+    expect(query).toContain(
+      "inverseRelations(first: 100) { pageInfo { hasNextPage endCursor } nodes { type issue { state { type } } } }",
+    );
+  });
+
+  test("relations past the first page are read by issue key and cursor, and counted", async () => {
+    const linear = fakeLinear(
+      pageOf(
+        node("EVA-1", {
+          relations: { pageInfo: more("r1"), nodes: related(100) },
+          inverseRelations: { pageInfo: last, nodes: [] },
+        }),
+        node("EVA-2", { relations: { pageInfo: last, nodes: [] }, inverseRelations: { nodes: [] } }),
+      ),
+      rest({ relations: { pageInfo: more("r2"), nodes: related(100) } }),
+      rest({ relations: { pageInfo: last, nodes: [...related(5), { type: "similar" }] } }),
+    );
+    const tickets = await linearTracker({ team: "EVA", apiKey: "k", fetch: linear.fetch }).pending();
+    expect(tickets.map((t) => [t.key, t.linkedIssues])).toEqual([
+      ["EVA-1", 205],
+      ["EVA-2", 0],
+    ]);
+    expect(linear.sent).toHaveLength(4);
+    expect(linear.sent.slice(2).map((s) => s.variables)).toEqual([
+      { id: "EVA-1", after: "r1" },
+      { id: "EVA-1", after: "r2" },
+    ]);
+    const query = linear.sent[2]?.query.replace(/\s+/g, " ") ?? "";
+    expect(query).toContain("issue(id: $id) { relations(first: 100, after: $after) { pageInfo");
+  });
+
+  test("labels and inverse relations past their first page are read too", async () => {
+    const linear = fakeLinear(
+      pageOf(
+        node("EVA-1", {
+          labels: { pageInfo: more("l1"), nodes: [{ name: "a" }] },
+          relations: { nodes: [] },
+          inverseRelations: { pageInfo: more("i1"), nodes: [blocker("blocks", "started")] },
+        }),
+      ),
+      rest({ labels: { pageInfo: last, nodes: [{ name: "b" }] } }),
+      rest({
+        inverseRelations: {
+          pageInfo: last,
+          nodes: [blocker("blocks", "unstarted"), blocker("duplicate", "duplicate")],
+        },
+      }),
+    );
+    const [ticket] = await linearTracker({ team: "EVA", apiKey: "k", fetch: linear.fetch }).pending();
+    expect(ticket).toMatchObject({ labels: ["a", "b"], openBlockers: 2, duplicates: 1, linkedIssues: 3 });
+  });
+
+  test("a named issue's nested connections are paged the same way", async () => {
+    const linear = fakeLinear(
+      () =>
+        Response.json({
+          data: {
+            issue: node("EVA-4", {
+              relations: { pageInfo: more("r1"), nodes: related(2) },
+              inverseRelations: { nodes: [] },
+            }),
+          },
+        }),
+      rest({ relations: { pageInfo: last, nodes: related(3) } }),
+    );
+    const [ticket] = await linearTracker({ team: "EVA", apiKey: "k", fetch: linear.fetch }).issues(["EVA-4"]);
+    expect(ticket?.linkedIssues).toBe(5);
+  });
+
+  test("a follow-up page with the wrong shape refuses naming the issue and connection", async () => {
+    const linear = fakeLinear(
+      pageOf(node("EVA-1", { relations: { pageInfo: more("r1"), nodes: [] } })),
+      rest({ relations: { nodes: [{ kind: "x" }] } }),
+    );
+    const err = await refusalOf(linearTracker({ team: "EVA", apiKey: "k", fetch: linear.fetch }).pending());
+    expect(err.message).toBe(
+      "Linear's reply did not have the expected shape while reading EVA-1's relations (at issue.relations.nodes.0.type)",
+    );
+  });
+});
+
 describe("refusals are value-free", () => {
   const SECRET = "lin_api_SECRET";
   const TEXT = "issue text that must not leak";

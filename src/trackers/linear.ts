@@ -47,12 +47,39 @@ export interface LinearTrackerOptions {
   timeoutMs?: number;
 }
 
+/** The nested connections an issue's facts are counted from, read 100 at
+ * a time. Each carries its page info, so a count never stops at the first
+ * page: an issue whose connection has more is read on with a follow-up
+ * query. Page info adds next to nothing to a query's complexity, so the
+ * pending page stays under Linear's limit. */
+const NESTED = {
+  labels: "nodes { name }",
+  relations: "nodes { type }",
+  inverseRelations: "nodes { type issue { state { type } } }",
+} as const;
+type NestedName = keyof typeof NESTED;
+const NESTED_NAMES = Object.keys(NESTED) as NestedName[];
+const NESTED_SIZE = 100;
+
+function nested(name: NestedName, after = false): string {
+  const args = after ? `first: ${NESTED_SIZE}, after: $after` : `first: ${NESTED_SIZE}`;
+  return `${name}(${args}) { pageInfo { hasNextPage endCursor } ${NESTED[name]} }`;
+}
+
 const ISSUE_FIELDS = `identifier title description url createdAt
-  labels(first: 100) { nodes { name } }
+  ${nested("labels")}
   reactions { id }
-  relations(first: 100) { nodes { type } }
-  inverseRelations(first: 100) { nodes { type issue { state { type } } } }
+  ${nested("relations")}
+  ${nested("inverseRelations")}
   assignee { id }`;
+
+/** The rest of one nested connection, by issue key and cursor. */
+const REST_QUERIES = Object.fromEntries(
+  NESTED_NAMES.map((name) => [
+    name,
+    `query($id: String!, $after: String) { issue(id: $id) { ${nested(name, true)} } }`,
+  ]),
+) as Record<NestedName, string>;
 
 const STATES_QUERY = `query($team: String!) {
   workflowStates(first: 250, filter: { team: { key: { eq: $team } } }) { nodes { id name type } }
@@ -67,23 +94,44 @@ const PENDING_QUERY = `query($team: String!, $states: [ID!]!, $after: String) {
 
 const ISSUE_QUERY = `query($id: String!) { issue(id: $id) { ${ISSUE_FIELDS} } }`;
 
+const pageInfoSchema = z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() });
+
+/** A nested connection; without page info it reads as complete. */
+const connection = <N extends z.ZodType>(node: N) =>
+  z.object({ pageInfo: pageInfoSchema.optional(), nodes: z.array(node) });
+
+const nestedSchemas = {
+  labels: connection(z.object({ name: z.string() })),
+  relations: connection(z.object({ type: z.string() })),
+  /** Relations other issues hold to this one: on "A blocks B", B sees the
+   * relation here with A as its `issue`. */
+  inverseRelations: connection(
+    z.object({ type: z.string(), issue: z.object({ state: z.object({ type: z.string() }) }) }),
+  ),
+};
+
 const issueSchema = z.object({
   identifier: z.string(),
   title: z.string(),
   description: z.string().nullable(),
   url: z.string(),
   createdAt: z.string(),
-  labels: z.object({ nodes: z.array(z.object({ name: z.string() })) }),
+  labels: nestedSchemas.labels,
   reactions: z.array(z.unknown()),
-  relations: z.object({ nodes: z.array(z.object({ type: z.string() })) }),
-  /** Relations other issues hold to this one: on "A blocks B", B sees the
-   * relation here with A as its `issue`. */
-  inverseRelations: z.object({
-    nodes: z.array(
-      z.object({ type: z.string(), issue: z.object({ state: z.object({ type: z.string() }) }) }),
-    ),
-  }),
+  relations: nestedSchemas.relations,
+  inverseRelations: nestedSchemas.inverseRelations,
   assignee: z.object({ id: z.string() }).nullable(),
+});
+
+/** A follow-up page of one nested connection. */
+const restSchema = z.object({
+  issue: z
+    .object({
+      labels: nestedSchemas.labels.optional(),
+      relations: nestedSchemas.relations.optional(),
+      inverseRelations: nestedSchemas.inverseRelations.optional(),
+    })
+    .nullable(),
 });
 
 const statesSchema = z.object({
@@ -94,7 +142,7 @@ const statesSchema = z.object({
 
 const pageSchema = z.object({
   issues: z.object({
-    pageInfo: z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() }),
+    pageInfo: pageInfoSchema,
     nodes: z.array(issueSchema),
   }),
 });
@@ -256,6 +304,28 @@ export function linearTracker(opts: LinearTrackerOptions): Tracker {
     return parsed.data;
   }
 
+  /** Reads the rest of every nested connection the first page cut short,
+   * so no count stops at a page boundary. */
+  async function complete(node: IssueNode): Promise<IssueNode> {
+    for (const name of NESTED_NAMES) {
+      const nodes: unknown[] = node[name].nodes;
+      let info = node[name].pageInfo;
+      while (info?.hasNextPage && info.endCursor !== null) {
+        const data: z.infer<typeof restSchema> = await call(
+          `reading ${node.identifier}'s ${name}`,
+          REST_QUERIES[name],
+          { id: node.identifier, after: info.endCursor },
+          restSchema,
+        );
+        const rest = data.issue?.[name];
+        if (rest === undefined) break;
+        nodes.push(...rest.nodes);
+        info = rest.pageInfo;
+      }
+    }
+    return node;
+  }
+
   return {
     source: source.spec,
     async pending() {
@@ -273,7 +343,7 @@ export function linearTracker(opts: LinearTrackerOptions): Tracker {
           { team, states, after },
           pageSchema,
         );
-        tickets.push(...page.issues.nodes.map(toTicket));
+        for (const n of page.issues.nodes) tickets.push(toTicket(await complete(n)));
         if (!page.issues.pageInfo.hasNextPage || page.issues.pageInfo.endCursor === null) break;
         after = page.issues.pageInfo.endCursor;
       }
@@ -296,7 +366,7 @@ export function linearTracker(opts: LinearTrackerOptions): Tracker {
       for (const key of named) {
         const data = await call(`reading ${key}`, ISSUE_QUERY, { id: key }, lookupSchema, { issue: null });
         if (data.issue === null) throw new LinearTrackerError(`Linear has no issue ${key}`);
-        tickets.push(toTicket(data.issue));
+        tickets.push(toTicket(await complete(data.issue)));
       }
       return tickets;
     },
