@@ -6,7 +6,9 @@
  * as pending. No secret is ever written here.
  *
  * A gitignored `config.local.yaml` replaces the committed file outright,
- * and the run says which file it read.
+ * and the run says which file it read. The sources it lists that the
+ * committed file does not are reported, so the CLI can say so whenever
+ * one is used.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -126,6 +128,25 @@ export interface LoadedConfig {
   /** Project-relative path of the file that was read. */
   path: string;
   local: boolean;
+  /** With `local`: the sources the local file lists that the committed
+   * `config.yaml` does not (all of them when there is none), as
+   * canonical specs. Those were never reviewed; empty otherwise. */
+  unreviewedSources: string[];
+}
+
+/** The canonical specs a committed `config.yaml` lists, read leniently:
+ * an absent or invalid file admits nothing, so every local source counts
+ * as unreviewed. The committed file is not otherwise used. */
+function committedSources(projectRoot: string): Set<string> {
+  const abs = join(projectRoot, CONFIG_PATH);
+  if (!existsSync(abs)) return new Set();
+  try {
+    return new Set(
+      parseConfig(readFileSync(abs, "utf8"), CONFIG_PATH).sources.map((s) => parseSource(s).spec),
+    );
+  } catch {
+    return new Set();
+  }
 }
 
 /** Read the project's config, the local file first; `undefined` when
@@ -136,7 +157,15 @@ export function readConfig(projectRoot: string): LoadedConfig | undefined {
     [CONFIG_PATH, false],
   ] as const) {
     const abs = join(projectRoot, path);
-    if (existsSync(abs)) return { config: parseConfig(readFileSync(abs, "utf8"), path), path, local };
+    if (!existsSync(abs)) continue;
+    const config = parseConfig(readFileSync(abs, "utf8"), path);
+    let unreviewedSources: string[] = [];
+    if (local) {
+      const committed = committedSources(projectRoot);
+      const specs = config.sources.map((s) => parseSource(s).spec);
+      unreviewedSources = [...new Set(specs)].filter((spec) => !committed.has(spec));
+    }
+    return { config, path, local, unreviewedSources };
   }
   return undefined;
 }

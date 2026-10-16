@@ -178,6 +178,22 @@ export class VerbFlags {
   }
 }
 
+/** Whether the args ask for help, read leniently so an unknown or
+ * malformed flag beside `--help` or `-h` cannot hide it. */
+function asksForHelp(verb: Verb, args: readonly string[]): boolean {
+  try {
+    const lenient = parseArgs({
+      args: [...args],
+      options: VERB_FLAGS[verb],
+      allowPositionals: true,
+      strict: false,
+    });
+    return lenient.values.help === true;
+  } catch {
+    return false;
+  }
+}
+
 /** Parse a verb's flags; a usage error is a refusal and `--help` a
  * help request, both thrown for the runner to render. */
 export function parseVerbArgs(verb: Verb, args: readonly string[]): VerbFlags {
@@ -185,6 +201,9 @@ export function parseVerbArgs(verb: Verb, args: readonly string[]): VerbFlags {
   try {
     parsed = parseArgs({ args: [...args], options: VERB_FLAGS[verb], allowPositionals: true, strict: true });
   } catch (err) {
+    // `--help` wins over any other flag, known or not: asking for the
+    // usage is never itself a usage error.
+    if (asksForHelp(verb, args)) throw new HelpRequest(VERB_USAGE[verb]);
     // A usage error is the refusal itself, not its cause: parseArgs's
     // TypeError and its frames would only point at the parser.
     const message = (err instanceof Error ? err.message : String(err)).replace(

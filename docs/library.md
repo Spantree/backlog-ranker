@@ -30,7 +30,7 @@ console.log("held:", result.ranking.held.map((row) => row.key));
 console.log(result.stats.requests, "requests,", result.stats.cachedAnswers, "answers from cache");
 ```
 
-`Project` carries `projectRoot`, `configPath`, `config`, `sources`, `allowlistKey`, `backend`, `engine()` and `tracker(source)`. `engine()` refuses when the backend's key variable is unset. `assertAllowed` and `tracker()` decide on what the tracker will read: the ref's `owner` and `repo` (or `team`), canonicalised by `sourceSpec(ref)` and matched case-insensitively, never the ref's own `spec` string. `tracker()` refuses, in order, a source not on the allowlist (with the same wording as `assertAllowed`) and an unset key variable for the source's tracker (`keys.github` for a `github:` source, `keys.linear` for a `linear:` one); a Linear tracker gets the config's `linear.states`. `LoadOptions` takes `allowOnce` (a `SourceRef` admitted for this project object only), `backend` and `fetch` (a replacement for the global fetch, used by tests).
+`Project` carries `projectRoot`, `configPath`, `config`, `sources`, `unreviewedSources` (the canonical specs a `config.local.yaml` lists that the committed `config.yaml` does not; the CLI prints a notice when it uses one, the library prints nothing), `allowlistKey`, `backend`, `engine()` and `tracker(source)`. `engine()` refuses when the backend's key variable is unset. `assertAllowed` and `tracker()` decide on what the tracker will read: the ref's `owner` and `repo` (or `team`), canonicalised by `sourceSpec(ref)` and matched case-insensitively, never the ref's own `spec` string. `tracker()` refuses, in order, a source not on the allowlist (with the same wording as `assertAllowed`) and an unset key variable for the source's tracker (`keys.github` for a `github:` source, `keys.linear` for a `linear:` one); a Linear tracker gets the config's `linear.states`. `LoadOptions` takes `allowOnce` (a `SourceRef` admitted for this project object only), `backend` and `fetch` (a replacement for the global fetch, used by tests).
 
 ## Building the pieces yourself
 
@@ -81,7 +81,7 @@ Each row (`RankedRow`) carries `key`, `title`, `url`, `composite`, `answers`, `f
 
 ## calibrateBacklog
 
-Takes the same options as `rankBacklog` without `tiebreak`, plus `hand`: issue keys best first (`acme/app#12`, `ENG-12`), in any case: each is matched to the issue read for it case-insensitively and counted under the tracker's spelling, so `ACME/app#12` counts as `acme/app#12`, and two spellings of one key are refused as a repeat. With a tracker it reads only those issues.
+Takes the same options as `rankBacklog` without `tiebreak`, plus `hand`: issue keys best first (`acme/app#12`, `ENG-12`), in any case: each is matched to the issue read for it case-insensitively and counted under the tracker's spelling, so `ACME/app#12` counts as `acme/app#12`, and two spellings of one key are refused as a repeat. With a tracker it reads only those issues. A hand key that no ticket answers (the tracker returned no issue for it, or `tickets` holds none) is refused by name before any engine request, rather than dropped from tau's `n`; the GitHub and Linear trackers already refuse an issue that does not exist.
 
 ```ts
 import { calibrateBacklog, type DecisionEngine, type AnswerCache, type Tracker } from "@feniix/backlog-ranker";

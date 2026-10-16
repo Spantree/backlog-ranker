@@ -13,6 +13,13 @@ describe("parseSource", () => {
       { kind: "github", owner: "Octo", repo: "Hello.World", spec: "github:octo/hello.world" },
     ],
     ["linear:eva", { kind: "linear", team: "EVA", spec: "linear:EVA" }],
+    [
+      "github:vercel/next.js",
+      { kind: "github", owner: "vercel", repo: "next.js", spec: "github:vercel/next.js" },
+    ],
+    ["github:octo/.github", { kind: "github", owner: "octo", repo: ".github", spec: "github:octo/.github" }],
+    ["github:a_b/c_d-e", { kind: "github", owner: "a_b", repo: "c_d-e", spec: "github:a_b/c_d-e" }],
+    ["github:9x/..a", { kind: "github", owner: "9x", repo: "..a", spec: "github:9x/..a" }],
   ])("%s parses", (spec, expected) => {
     expect(parseSource(spec)).toEqual(expected as never);
   });
@@ -26,6 +33,13 @@ describe("parseSource", () => {
     "github:owner",
     "github:a/b/c",
     "github:/r",
+    "github:../..",
+    "github:./repo",
+    "github:owner/..",
+    "github:owner/.",
+    "github:.owner/repo",
+    "github:-owner/repo",
+    "github:_owner/repo",
   ])("%s is refused naming both spellings", (bad) => {
     let err: unknown;
     try {
@@ -105,20 +119,28 @@ describe("parseIssueKey", () => {
     expect(parsed.number).toBe(3);
   });
 
-  test.each(["3", "#3", "KIT-0", "KIT-", "-3", "K I-3", "kit/kit#0", "TOOLONGTEAM1-3"])(
-    "%s is refused naming both key spellings",
-    (bad) => {
-      let err: unknown;
-      try {
-        parseIssueKey(bad);
-      } catch (e) {
-        err = e;
-      }
-      expect(isRefusal(err)).toBe(true);
-      expect((err as Error).message).toContain("<owner>/<repo>#<number>");
-      expect((err as Error).message).toContain("<TEAM>-<number>");
-    },
-  );
+  test.each([
+    "3",
+    "#3",
+    "KIT-0",
+    "KIT-",
+    "-3",
+    "K I-3",
+    "kit/kit#0",
+    "TOOLONGTEAM1-3",
+    "../..#1",
+    "kit/..#1",
+  ])("%s is refused naming both key spellings", (bad) => {
+    let err: unknown;
+    try {
+      parseIssueKey(bad);
+    } catch (e) {
+      err = e;
+    }
+    expect(isRefusal(err)).toBe(true);
+    expect((err as Error).message).toContain("<owner>/<repo>#<number>");
+    expect((err as Error).message).toContain("<TEAM>-<number>");
+  });
 });
 
 describe("issueKeyIn", () => {

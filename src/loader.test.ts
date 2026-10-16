@@ -81,6 +81,25 @@ describe("loadProject", () => {
     expect(project.backend).toBe("openrouter");
   });
 
+  test("names the sources config.local.yaml lists that the committed config does not", () => {
+    writeConfig("config.yaml", "sources:\n  - github:kit/kit\nbackend: typesafe\n");
+    writeConfig(
+      "config.local.yaml",
+      "sources:\n  - github:Kit/Kit\n  - github:mine/fork\n  - linear:eng\nbackend: openrouter\n",
+    );
+    expect(loadProject(root, {}).unreviewedSources).toEqual(["github:mine/fork", "linear:ENG"]);
+  });
+
+  test("without a committed config, every source config.local.yaml lists is unreviewed", () => {
+    writeConfig("config.local.yaml", "sources:\n  - github:mine/fork\nbackend: openrouter\n");
+    expect(loadProject(root, {}).unreviewedSources).toEqual(["github:mine/fork"]);
+  });
+
+  test("the committed config alone leaves no source unreviewed", () => {
+    writeConfig("config.yaml", "sources:\n  - github:kit/kit\nbackend: typesafe\n");
+    expect(loadProject(root, {}).unreviewedSources).toEqual([]);
+  });
+
   test.each([
     ["an unknown key", "sources: []\nbackend: typesafe\nextra: 1\n", "extra"],
     ["a bad source", "sources:\n  - jira:X\nbackend: typesafe\n", "sources.0"],

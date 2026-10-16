@@ -85,6 +85,9 @@ export function renderError(err: unknown, options: { debug: boolean }): string {
     if (refusal && !options.debug) withheld = true;
     else lines.push(...framesOf(current));
     current = safeRead(() => (current as Error).cause);
+    // A `null` cause is no cause, as `undefined` is: `{ cause: null }` is
+    // how some code spells "none". A thrown `null` still prints above.
+    if (current === null) break;
   }
   if (withheld) lines.push(DEBUG_HINT);
   return lines.join("\n");

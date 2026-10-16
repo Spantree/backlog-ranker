@@ -79,7 +79,8 @@ describe("rank --allow-once", () => {
       "openrouter",
     );
     expect(stderr()).toBe(
-      "the titles, bodies and labels of open issues in github:kit/kit will be sent to openrouter " +
+      "the titles, bodies and labels of open issues in github:kit/kit, with each issue's age bucket, " +
+        "reaction count, linked issue count and duplicate count, will be sent to openrouter " +
         "for this run only; nothing is saved to config\n",
     );
     expect(code).toBe(0);
@@ -93,7 +94,7 @@ describe("rank --allow-once", () => {
     const path = writeConfig("sources:\n  - github:other/repo\nbackend: openrouter\n");
     const before = readFileSync(path);
     expect(await rank("-r", RUBRIC_FILE, "-s", "github:kit/kit", "--allow-once")).toBe(0);
-    expect(stderr()).toContain("open issues in github:kit/kit will be sent to openrouter for this run only");
+    expect(stderr()).toContain("will be sent to openrouter for this run only");
     expect(counts.github).toBe(1);
     expect(stdout()).toContain(".backlog-ranker/config.yaml");
     expect(readFileSync(path).equals(before)).toBe(true);
@@ -105,7 +106,8 @@ describe("rank --allow-once", () => {
     const before = readFileSync(path);
     expect(await rank("-r", RUBRIC_FILE, "-s", "linear:KIT", "--allow-once")).toBe(0);
     expect(stderr()).toBe(
-      "the titles, bodies and labels of pending issues in linear:KIT will be sent to openrouter " +
+      "the titles, bodies and labels of pending issues in linear:KIT, with each issue's age bucket, " +
+        "reaction count, linked issue count and duplicate count, will be sent to openrouter " +
         "for this run only; nothing is saved to config\n",
     );
     expect(counts).toEqual({ github: 0, linear: 2, jev: 6, other: 0 });
@@ -185,11 +187,68 @@ describe("rank --allow-once", () => {
     expect(await rankIn(work, "-r", RUBRIC_FILE, "-s", "github:kit/kit")).toBe(0);
   });
 
+  test.each([
+    ["the tracker", "GITHUB_TOKEN"],
+    ["the engine", "OPENROUTER_API_KEY"],
+  ])("a missing key for %s refuses without announcing a send", async (_, unset) => {
+    const net = replayFetch();
+    const io: CliIo = {
+      stdout: (text) => void out.push(text),
+      stderr: (text) => void err.push(text),
+      env: { ...ENV, [unset]: undefined },
+    };
+    const code = await run(
+      ["rank", "-r", RUBRIC_FILE, "-s", "github:kit/kit", "--allow-once", "--backend", "openrouter"],
+      io,
+      {
+        resolve: (cwd, env, options) => loadProject(cwd, env, { ...options, fetch: net.fetch }),
+        cwd: () => root,
+        now: () => FIXTURE_NOW,
+      },
+    );
+    expect(code).toBe(1);
+    expect(stderr()).toContain(`${unset} is not set`);
+    expect(stderr()).not.toContain("will be sent");
+    expect(net.counts).toEqual({ github: 0, linear: 0, jev: 0, other: 0 });
+  });
+
   test("a missing rubric file refuses naming it", async () => {
     expect(
       await rank("-r", "./nope.yaml", "-s", "github:kit/kit", "--allow-once", "--backend", "openrouter"),
     ).toBe(1);
     expect(stderr()).toContain("no rubric file ./nope.yaml");
     expect(counts).toEqual({ github: 0, linear: 0, jev: 0, other: 0 });
+  });
+});
+
+describe("a source config.local.yaml adds", () => {
+  function writeLocal(text: string): void {
+    mkdirSync(join(root, ".backlog-ranker"), { recursive: true });
+    writeFileSync(join(root, ".backlog-ranker", "config.local.yaml"), text);
+  }
+
+  const NOTICE =
+    "github:kit/kit is allowed only by .backlog-ranker/config.local.yaml, not by the committed " +
+    ".backlog-ranker/config.yaml; its issues will be sent to openrouter on an unreviewed allowlist entry\n";
+
+  test("ranks, saying on stderr that the entry was never reviewed", async () => {
+    writeConfig("sources:\n  - github:other/repo\nbackend: openrouter\n");
+    writeLocal("sources:\n  - github:other/repo\n  - github:kit/kit\nbackend: openrouter\n");
+    expect(await rank("-r", RUBRIC_FILE, "-s", "github:kit/kit")).toBe(0);
+    expect(stderr()).toBe(NOTICE);
+    expect(counts.github).toBe(1);
+  });
+
+  test("says so with no committed config at all", async () => {
+    writeLocal("sources:\n  - github:kit/kit\nbackend: openrouter\n");
+    expect(await rank("-r", RUBRIC_FILE, "-s", "github:kit/kit")).toBe(0);
+    expect(stderr()).toBe(NOTICE);
+  });
+
+  test("is silent for a source the committed config also lists", async () => {
+    writeConfig("sources:\n  - github:kit/kit\nbackend: openrouter\n");
+    writeLocal("sources:\n  - github:kit/kit\n  - github:mine/fork\nbackend: openrouter\n");
+    expect(await rank("-r", RUBRIC_FILE, "-s", "github:kit/kit")).toBe(0);
+    expect(stderr()).toBe("");
   });
 });
