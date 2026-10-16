@@ -96,6 +96,8 @@ export function openCache(
       mkdirSync(dir, { recursive: true });
       // Re-read before writing, so answers another run flushed since this
       // one opened the file survive; this run's own answers win a tie.
+      // There is no lock: when two flushes overlap, the later rename can
+      // drop the other run's new answers, which are asked again next run.
       const merged: CacheFile = { schema: SCHEMA, engine, model, entries: { ...readEntries(), ...added } };
       const tmp = `${path}.${process.pid}.tmp`;
       writeFileSync(tmp, `${JSON.stringify(merged)}\n`);

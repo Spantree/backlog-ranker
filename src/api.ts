@@ -187,8 +187,12 @@ export interface ExplainedGate {
   action: Gate["action"];
   threshold: number;
   probability: number;
-  /** Whether the gate acted: a pin at or above, a hold under, its threshold. */
+  /** Whether the answer crossed the threshold: a pin at or above it, a
+   * hold under it. */
   triggered: boolean;
+  /** What the gate did once precedence applied: a fact-gate hold
+   * overrides a pin, and a pin overrides a model-gate hold. */
+  outcome: "pinned" | "held" | "none" | "overridden by hold" | "overridden by pin";
 }
 
 export interface ExplainedFactGate {
@@ -200,8 +204,9 @@ export interface ExplainedFactGate {
   value: number;
   /** Whether the fact is at least `atLeast`. */
   fired: boolean;
-  /** What the gate did: a fired sink on a pinned ticket does nothing. */
-  outcome: "held" | "sunk" | "none";
+  /** What the gate did once precedence applied: a fired sink on a held
+   * or pinned ticket does nothing. */
+  outcome: "held" | "sunk" | "none" | "overridden by hold" | "overridden by pin";
 }
 
 export interface ExplainResult {
@@ -253,6 +258,13 @@ export async function explainTicket(opts: ExplainOptions): Promise<ExplainResult
     const ranking = rank(rubric, scored);
     const row = ranking.ranked[0] ?? ranking.held[0];
     if (row === undefined) throw new Error(`${ticket.key} was scored but not ranked`);
+    // A fired gate that precedence overrode names what overrode it: a
+    // held row's pin and sink did nothing, nor did a pinned row's sink or
+    // model-gate hold.
+    const isHeld = ranking.held.length > 0;
+    const overridden = isHeld ? "overridden by hold" : "overridden by pin";
+    const pinOutcome = isHeld ? overridden : "pinned";
+    const holdOutcome = isHeld ? "held" : overridden;
     const criteria = rubric.criteria.map((c): ExplainedCriterion => {
       const a = row.answers[c.id];
       if (a?.kind !== "score") throw new Error(`${row.key} has no score answer for criterion "${c.id}"`);
@@ -269,24 +281,33 @@ export async function explainTicket(opts: ExplainOptions): Promise<ExplainResult
     const gates = rubric.gates.map((g): ExplainedGate => {
       const a = row.answers[g.id];
       if (a?.kind !== "noul") throw new Error(`${row.key} has no noul answer for gate "${g.id}"`);
+      const triggered = row.pinnedBy.includes(g.id) || row.heldBy.includes(g.id);
       return {
         id: g.id,
         action: g.action,
         threshold: g.threshold,
         probability: a.probability,
-        triggered: row.pinnedBy.includes(g.id) || row.heldBy.includes(g.id),
+        triggered,
+        outcome: !triggered ? "none" : g.action === "pin_top" ? pinOutcome : holdOutcome,
       };
     });
     const facts = ticketFacts(ticket);
     const factGates = rubric.fact_gates.map((g): ExplainedFactGate => {
-      const outcome = row.heldBy.includes(g.id) ? "held" : row.sunkBy.includes(g.id) ? "sunk" : "none";
+      const fired = factGateFires(g, row);
+      const outcome = row.heldBy.includes(g.id)
+        ? "held"
+        : row.sunkBy.includes(g.id)
+          ? "sunk"
+          : fired
+            ? overridden
+            : "none";
       return {
         id: g.id,
         fact: g.fact,
         action: g.action,
         atLeast: g.at_least,
         value: facts[g.fact],
-        fired: factGateFires(g, row),
+        fired,
         outcome,
       };
     });

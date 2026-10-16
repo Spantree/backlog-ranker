@@ -77,7 +77,7 @@ const tracker = linearTracker({ team: "ENG", apiKey: process.env.LINEAR_API_KEY 
 
 Takes `rubric` (a parsed `Rubric` or a YAML file path), exactly one of `tickets` and `tracker`, `engine`, `cache`, and optionally `now` (the clock that buckets ages), `weights`, `concurrency` (a whole number of at least 1, default 8) and `tiebreak` (1 to 10). Returns `rubric` (as applied, overrides included), `ranking` (`ranked` rows, pinned then normal then sunk, and `held` rows), `states` (each issue's state as sent, by key), `stats`, and `tiebreak` stats when asked.
 
-Each row (`RankedRow`) carries `key`, `title`, `url`, `composite`, `answers`, `facts` (the numeric facts fact gates read, by rubric name), `pinnedBy`, `heldBy` (`flag_if_below` gates and `hold` fact gates), `sunkBy` (`sink` fact gates, on unpinned rows only), `lowConfidence` and `truncated`. Fact gates never send a request and never change a cache key; see [rubrics.md](rubrics.md#fact-gates) for their precedence over pins and holds.
+Each row (`RankedRow`) carries `key`, `title`, `url`, `composite`, `answers`, `facts` (the numeric facts fact gates read, by rubric name), `pinnedBy`, `heldBy` (`flag_if_below` gates and `hold` fact gates), `sunkBy` (`sink` fact gates, on rows neither pinned nor held), `lowConfidence` and `truncated`. Fact gates never send a request and never change a cache key; see [rubrics.md](rubrics.md#fact-gates) for their precedence over pins and holds.
 
 ## calibrateBacklog
 
@@ -105,7 +105,7 @@ for (const { above, below } of calibration.disagreements) console.log(`${above} 
 
 ## explainTicket
 
-Takes the options every facade shares (`DecisionRunOptions`: `rubric`, `engine`, `cache` and optionally `now`) and either `ticket` or both `tracker` and `key`. Returns the composite, per-criterion `score`, `confidence`, `lowConfidence` and per-level `probability`, per-gate `probability`, `threshold` and `triggered`, `facts` (the age bucket and every numeric fact, including those only fact gates read), per-fact-gate `fact`, `action`, `atLeast`, `value`, `fired` and `outcome` (`held`, `sunk` or `none`), `flags` (`pinnedBy`, `heldBy`, `sunkBy`, `lowConfidence`, and `truncated`, when the body was cut to fit the prompt) and `stats`. A rubric can be built in memory with `rubricSchema.parse` (or `parseRubric(yamlText, origin)`), which applies the defaults:
+Takes the options every facade shares (`DecisionRunOptions`: `rubric`, `engine`, `cache` and optionally `now`) and either `ticket` or both `tracker` and `key`. Returns the composite, per-criterion `score`, `confidence`, `lowConfidence` and per-level `probability`, per-gate `probability`, `threshold`, `triggered` (the answer crossed the threshold) and `outcome` (`pinned`, `held`, `none`, `overridden by hold` or `overridden by pin`), `facts` (the age bucket and every numeric fact, including those only fact gates read), per-fact-gate `fact`, `action`, `atLeast`, `value`, `fired` and `outcome` (`held`, `sunk`, `none`, `overridden by hold` or `overridden by pin`: a fired gate that [precedence](rubrics.md#precedence) overrode), `flags` (`pinnedBy`, `heldBy`, `sunkBy`, `lowConfidence`, and `truncated`, when the body was cut to fit the prompt) and `stats`. A rubric can be built in memory with `rubricSchema.parse` (or `parseRubric(yamlText, origin)`), which applies the defaults:
 
 ```ts
 import { explainTicket, rubricSchema, type AnswerCache, type DecisionEngine, type Ticket } from "backlog-ranker";

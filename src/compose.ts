@@ -35,7 +35,8 @@ export interface RankedRow extends Scored {
   /** Gates whose probability fell under their threshold, and hold
    * fact gates that fired. */
   heldBy: string[];
-  /** Sink fact gates that fired on this unpinned row. */
+  /** Sink fact gates that fired on this row, when it is neither pinned
+   * nor held. */
   sunkBy: string[];
   /** Criteria answered below the rubric's confidence floor. */
   lowConfidence: string[];
@@ -104,7 +105,12 @@ function byComposite(a: RankedRow, b: RankedRow): number {
 }
 
 export function rank(rubric: Rubric, rows: readonly Scored[]): Ranking {
-  const factHeld = new Set<string>();
+  // Precedence: a fact-gate hold wins over a pin (an open closing pull
+  // request means someone is on it), a pin wins over a model-gate hold
+  // ("any security issue jumps the queue" holds even for a thin ticket,
+  // which stays on top carrying its held flag) and over a sink, and a
+  // sink applies only to rows neither pinned nor held.
+  const heldKeys = new Set<string>();
   const out: RankedRow[] = rows.map((row) => {
     const pinnedBy: string[] = [];
     const heldBy: string[] = [];
@@ -115,26 +121,18 @@ export function rank(rubric: Rubric, rows: readonly Scored[]): Ranking {
       if (g.action === "pin_top" && a.probability >= g.threshold) pinnedBy.push(g.id);
       if (g.action === "flag_if_below" && a.probability < g.threshold) heldBy.push(g.id);
     }
-    for (const g of rubric.fact_gates) {
-      if (!factGateFires(g, row)) continue;
-      if (g.action === "hold") {
-        heldBy.push(g.id);
-        factHeld.add(row.key);
-      } else if (pinnedBy.length === 0) sunkBy.push(g.id);
-    }
+    const fired = rubric.fact_gates.filter((g) => factGateFires(g, row));
+    const factHolds = fired.filter((g) => g.action === "hold").map((g) => g.id);
+    heldBy.push(...factHolds);
+    if (factHolds.length > 0 || (heldBy.length > 0 && pinnedBy.length === 0)) heldKeys.add(row.key);
+    else if (pinnedBy.length === 0) sunkBy.push(...fired.filter((g) => g.action === "sink").map((g) => g.id));
     const lowConfidence = rubric.criteria
       .filter((c) => scoreOf(row, c).confidence < rubric.confidence_floor)
       .map((c) => c.id);
     return { ...row, composite: compositeOf(rubric, row), pinnedBy, heldBy, sunkBy, lowConfidence };
   });
-  // Precedence: a fact-gate hold wins over a pin (an open closing pull
-  // request means someone is on it), a pin wins over a model-gate hold
-  // ("any security issue jumps the queue" holds even for a thin ticket,
-  // which stays on top carrying its held flag) and over a sink.
-  const isHeld = (r: RankedRow): boolean =>
-    factHeld.has(r.key) || (r.heldBy.length > 0 && r.pinnedBy.length === 0);
-  const held = out.filter(isHeld).sort(byComposite);
-  const kept = out.filter((r) => !isHeld(r));
+  const held = out.filter((r) => heldKeys.has(r.key)).sort(byComposite);
+  const kept = out.filter((r) => !heldKeys.has(r.key));
   const group = (g: number): RankedRow[] => kept.filter((r) => rankGroup(r) === g).sort(byComposite);
   return { ranked: [...group(0), ...group(1), ...group(2)], held };
 }

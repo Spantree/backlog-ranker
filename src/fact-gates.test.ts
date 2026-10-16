@@ -93,7 +93,20 @@ describe("fact gates in rankBacklog", () => {
       ticket(2, "middling"),
     ]);
     expect(keys(ranking.ranked)).toEqual(["kit/kit#2"]);
-    expect(keys(ranking.held)).toEqual(["kit/kit#1"]);
+    expect(ranking.held.map((r) => [r.key, r.heldBy, r.sunkBy])).toEqual([["kit/kit#1", ["judgeable"], []]]);
+  });
+
+  test("a held row carries no sunk flag, whichever gate held it", async () => {
+    const { ranking } = await rankOf([
+      ticket(1, "big win", { openBlockers: 1, openClosingPrs: 1 }),
+      ticket(2, "something vague", { openBlockers: 1 }),
+      ticket(3, "middling"),
+    ]);
+    expect(keys(ranking.ranked)).toEqual(["kit/kit#3"]);
+    expect(ranking.held.map((r) => [r.key, r.heldBy, r.sunkBy])).toEqual([
+      ["kit/kit#1", ["in_progress"], []],
+      ["kit/kit#2", ["judgeable"], []],
+    ]);
   });
 
   test("a gate on assignees holds an assigned ticket; without it the same ticket ranks as before", async () => {
@@ -245,10 +258,14 @@ describe("fact gates in explainTicket", () => {
     expect(result.flags).toMatchObject({ sunkBy: ["blocked"], heldBy: [] });
   });
 
-  test("a pinned ticket's fired sink has no effect; its fired hold holds it", async () => {
+  test("a fact-held ticket's fired pin and sink are overridden by the hold", async () => {
     const pinnedBlocked = await explain(ticket(1, "token in a log", { openBlockers: 1, openClosingPrs: 1 }));
+    expect(pinnedBlocked.gates.map((g) => [g.id, g.triggered, g.outcome])).toEqual([
+      ["security", true, "overridden by hold"],
+      ["judgeable", false, "none"],
+    ]);
     expect(pinnedBlocked.factGates.map((g) => [g.id, g.fired, g.outcome])).toEqual([
-      ["blocked", true, "none"],
+      ["blocked", true, "overridden by hold"],
       ["in_progress", true, "held"],
     ]);
     expect(pinnedBlocked.flags).toMatchObject({
@@ -256,5 +273,30 @@ describe("fact gates in explainTicket", () => {
       heldBy: ["in_progress"],
       sunkBy: [],
     });
+  });
+
+  test("a pinned ticket's fired sink and model-gate hold are overridden by the pin", async () => {
+    const result = await explain(ticket(1, "vague leak", { openBlockers: 1 }));
+    expect(result.gates.map((g) => [g.id, g.triggered, g.outcome])).toEqual([
+      ["security", true, "pinned"],
+      ["judgeable", true, "overridden by pin"],
+    ]);
+    expect(result.factGates.map((g) => [g.id, g.fired, g.outcome])).toEqual([
+      ["blocked", true, "overridden by pin"],
+      ["in_progress", false, "none"],
+    ]);
+  });
+
+  test("a model-held ticket's fired sink is overridden by the hold", async () => {
+    const result = await explain(ticket(1, "something vague", { openBlockers: 1 }));
+    expect(result.gates.map((g) => [g.id, g.outcome])).toEqual([
+      ["security", "none"],
+      ["judgeable", "held"],
+    ]);
+    expect(result.factGates.map((g) => [g.id, g.outcome])).toEqual([
+      ["blocked", "overridden by hold"],
+      ["in_progress", "none"],
+    ]);
+    expect(result.flags).toMatchObject({ heldBy: ["judgeable"], sunkBy: [] });
   });
 });
