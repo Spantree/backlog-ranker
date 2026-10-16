@@ -27,5 +27,17 @@ jobs:
       - run: node scripts/smoke-package.mjs
       # Node 22 bundles npm 10; trusted publishing needs npm 11.5.1 or later.
       - run: npm install -g npm@11.16.0 --ignore-scripts
-      # prepack builds a clean dist/ first.
-      - run: npm publish --loglevel verbose
+      # prepack builds a clean dist/ first. npm tries trusted publishing
+      # (OIDC) first; it currently fails for this repository
+      # (https://github.com/npm/cli/issues/9969), so an NPM_TOKEN secret, when
+      # set, is the fallback. The .npmrc line is written only when the secret
+      # exists: an empty token line would stop npm from trying OIDC at all.
+      # Delete the secret once trusted publishing works.
+      - name: npm publish
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "$NPM_TOKEN" ]; then
+            echo '//registry.npmjs.org/:_authToken=${NPM_TOKEN}' > "$HOME/.npmrc"
+          fi
+          npm publish --provenance --loglevel verbose
