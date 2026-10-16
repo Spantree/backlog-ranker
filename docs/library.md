@@ -77,7 +77,7 @@ const tracker = linearTracker({ team: "ENG", apiKey: process.env.LINEAR_API_KEY 
 
 Takes `rubric` (a parsed `Rubric` or a YAML file path), exactly one of `tickets` and `tracker`, `engine`, `cache`, and optionally `now` (the clock that buckets ages), `weights`, `concurrency` (a whole number of at least 1, default 8) and `tiebreak` (1 to 10). Returns `rubric` (as applied, overrides included), `ranking` (`ranked` rows, pinned then normal then sunk, and `held` rows), `states` (each issue's state as sent, by key), `stats`, and `tiebreak` stats when asked.
 
-Each row (`RankedRow`) carries `key`, `title`, `url`, `composite`, `answers`, `facts` (the numeric facts fact gates read, by rubric name), `pinnedBy`, `heldBy` (`flag_if_below` gates and `hold` fact gates), `sunkBy` (`sink` fact gates, on unpinned rows only), `lowConfidence` and `truncated`. Fact gates never send a request and never change a cache key; see [rubrics.md](rubrics.md#fact-gates) for their precedence over pins and holds.
+Each row (`RankedRow`) carries `key`, `title`, `url`, `composite`, `answers`, `facts` (the numeric facts fact gates read, by rubric name), `pinnedBy`, `heldBy` (`flag_if_below` gates and `hold` fact gates), `sunkBy` (`sink` fact gates, on rows neither pinned nor held), `lowConfidence` and `truncated`. Fact gates never send a request and never change a cache key; see [rubrics.md](rubrics.md#fact-gates) for their precedence over pins and holds.
 
 ## calibrateBacklog
 
