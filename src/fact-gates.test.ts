@@ -93,7 +93,20 @@ describe("fact gates in rankBacklog", () => {
       ticket(2, "middling"),
     ]);
     expect(keys(ranking.ranked)).toEqual(["kit/kit#2"]);
-    expect(keys(ranking.held)).toEqual(["kit/kit#1"]);
+    expect(ranking.held.map((r) => [r.key, r.heldBy, r.sunkBy])).toEqual([["kit/kit#1", ["judgeable"], []]]);
+  });
+
+  test("a held row carries no sunk flag, whichever gate held it", async () => {
+    const { ranking } = await rankOf([
+      ticket(1, "big win", { openBlockers: 1, openClosingPrs: 1 }),
+      ticket(2, "something vague", { openBlockers: 1 }),
+      ticket(3, "middling"),
+    ]);
+    expect(keys(ranking.ranked)).toEqual(["kit/kit#3"]);
+    expect(ranking.held.map((r) => [r.key, r.heldBy, r.sunkBy])).toEqual([
+      ["kit/kit#1", ["in_progress"], []],
+      ["kit/kit#2", ["judgeable"], []],
+    ]);
   });
 
   test("a gate on assignees holds an assigned ticket; without it the same ticket ranks as before", async () => {
