@@ -123,4 +123,4 @@ Every answer is cached in `.backlog-ranker/cache/<engine>--<model>.json`, for ex
 - answers from different model versions live in different files and never mix;
 - the cache does not depend on the backend: answers fetched through OpenRouter answer a run against TypeSafe, and the reverse.
 
-The file is merged on write with an atomic rename, so two concurrent runs keep each other's answers. A file from another schema, engine or model, or a corrupt one, is treated as empty. Delete the directory to start cold.
+The file is merged on write with an atomic rename, so a run keeps the answers another run flushed before it. There is no lock: two runs that flush at the same moment can lose one run's new answers, which are asked again on the next run. A file from another schema, engine or model, or a corrupt one, is treated as empty. Delete the directory to start cold.
