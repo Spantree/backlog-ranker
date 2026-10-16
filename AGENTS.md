@@ -24,7 +24,7 @@ mise exec -- bun install
 mise exec -- bun run typecheck   # src and scripts/
 mise exec -- bun run lint        # biome
 mise exec -- bun test
-mise exec -- bun run build       # tsc to dist/
+mise exec -- bun run build       # empties dist/, then tsc; npm pack and publish run it (prepack)
 mise exec -- npm pack --dry-run  # check what ships
 ```
 
