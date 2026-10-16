@@ -6,7 +6,7 @@ import { calibrateBacklog, explainTicket, rankBacklog } from "./api.js";
 import { openCache } from "./cache.js";
 import type { DecisionAnswer, DecisionEngine } from "./engine.js";
 import { isRefusal } from "./errors.js";
-import { parseRubric } from "./rubric.js";
+import { parseRubric, RubricError } from "./rubric.js";
 import { scoreTickets } from "./score.js";
 import type { Ticket } from "./ticket.js";
 import type { Tracker } from "./trackers/tracker.js";
@@ -251,6 +251,33 @@ criteria:
         (e: unknown) => e,
       );
       expect(isRefusal(err)).toBe(true);
+    }
+    expect(engine.calls).toBe(0);
+  });
+
+  test("a missing rubric file is a RubricError refusal, as the CLI words it", async () => {
+    const engine = stubEngine();
+    const cache = openCache(tmp(), engine.id, engine.model);
+    const missing = join(tmp(), "nope.yaml");
+    for (const run of [
+      () => rankBacklog({ rubric: missing, tickets: TICKETS, engine, cache }),
+      () =>
+        calibrateBacklog({
+          rubric: missing,
+          tickets: TICKETS,
+          hand: ["acme/app#1", "acme/app#2"],
+          engine,
+          cache,
+        }),
+      () => explainTicket({ rubric: missing, ticket: TICKETS[0] as Ticket, engine, cache }),
+    ]) {
+      const err = await run().then(
+        () => undefined,
+        (e: unknown) => e,
+      );
+      expect(isRefusal(err)).toBe(true);
+      expect(err).toBeInstanceOf(RubricError);
+      expect((err as Error).message).toBe(`no rubric file ${missing}`);
     }
     expect(engine.calls).toBe(0);
   });

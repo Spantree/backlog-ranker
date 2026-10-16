@@ -12,7 +12,7 @@ import { factGateFires, type Ranking, rank, type Scored } from "./compose.js";
 import type { DecisionEngine } from "./engine.js";
 import { RefusalError } from "./errors.js";
 import { type Calibration, kendallTau } from "./kendall.js";
-import { type FactGate, type Gate, parseRubric, type Rubric, withWeights } from "./rubric.js";
+import { type FactGate, type Gate, parseRubric, type Rubric, RubricError, withWeights } from "./rubric.js";
 import { assertConcurrency, type ScoreStats, scoreTickets } from "./score.js";
 import type { AgeBucket, TicketState } from "./state.js";
 import { type Ticket, type TicketFacts, ticketFacts } from "./ticket.js";
@@ -71,11 +71,20 @@ export interface CalibrateResult {
   stats: ScoreStats;
 }
 
+/** A rubric file's text. A relative path resolves against the working
+ * directory; a missing file is a refusal worded as the CLI's. */
+function readRubricFile(path: string): string {
+  try {
+    return readFileSync(path, "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") throw new RubricError(`no rubric file ${path}`);
+    throw err;
+  }
+}
+
 function resolveRubric(opts: DecisionRunOptions & Pick<BacklogOptions, "weights">): Rubric {
   const rubric =
-    typeof opts.rubric === "string"
-      ? parseRubric(readFileSync(opts.rubric, "utf8"), opts.rubric)
-      : opts.rubric;
+    typeof opts.rubric === "string" ? parseRubric(readRubricFile(opts.rubric), opts.rubric) : opts.rubric;
   return opts.weights === undefined ? rubric : withWeights(rubric, opts.weights);
 }
 
