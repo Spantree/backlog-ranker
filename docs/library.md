@@ -81,7 +81,7 @@ Each row (`RankedRow`) carries `key`, `title`, `url`, `composite`, `answers`, `f
 
 ## calibrateBacklog
 
-Takes the same options as `rankBacklog` without `tiebreak`, plus `hand`: issue keys best first, exactly as the tracker spells them (`acme/app#12`, `ENG-12`). With a tracker it reads only those issues.
+Takes the same options as `rankBacklog` without `tiebreak`, plus `hand`: issue keys best first (`acme/app#12`, `ENG-12`), in any case: each is matched to the issue read for it case-insensitively and counted under the tracker's spelling, so `ACME/app#12` counts as `acme/app#12`, and two spellings of one key are refused as a repeat. With a tracker it reads only those issues.
 
 ```ts
 import { calibrateBacklog, type DecisionEngine, type AnswerCache, type Tracker } from "backlog-ranker";
