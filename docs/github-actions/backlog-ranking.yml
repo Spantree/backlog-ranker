@@ -1,0 +1,67 @@
+# Ranks this repository's open issues every Monday and on demand, and
+# publishes the ranking as the run's job summary and a JSON artifact.
+# Read-only toward the repository: it never writes issues, labels or comments.
+#
+# Copy to .github/workflows/backlog-ranking.yml. It needs a committed
+# .backlog-ranker/config.yaml listing github:<this owner>/<this repo> under
+# `sources`, a rubric at .backlog-ranker/rubrics/impact-roi.yaml, and the
+# model key as a repository secret. See docs/github-actions.md in
+# @feniix/backlog-ranker.
+
+name: Backlog ranking
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  rank:
+    runs-on: ubuntu-latest
+    env:
+      # Pin the version you tested; a new release can change the ranking.
+      BACKLOG_RANKER: "@feniix/backlog-ranker@0.1.2"
+      RUBRIC: impact-roi
+      SOURCE: github:${{ github.repository }}
+      GITHUB_TOKEN: ${{ github.token }}
+      # The variable the config's `keys` names for its backend:
+      # OPENROUTER_API_KEY for openrouter, TYPESAFE_API_KEY for typesafe.
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # Answers are cached by issue state and question, so a run asks only
+      # about new or edited issues. Each run saves under a new key and
+      # restores the newest earlier one.
+      - uses: actions/cache@v6
+        with:
+          path: .backlog-ranker/cache
+          key: backlog-ranker-${{ github.run_id }}
+          restore-keys: backlog-ranker-
+
+      - name: Rank into the job summary
+        run: |
+          {
+            echo "## Backlog ranking"
+            echo
+            echo '```text'
+            npx -y "$BACKLOG_RANKER" rank --rubric "$RUBRIC" --source "$SOURCE"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Answered entirely from the cache the previous step filled.
+      - name: Rank as JSON
+        run: npx -y "$BACKLOG_RANKER" rank --rubric "$RUBRIC" --source "$SOURCE" --json > ranking.json
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: backlog-ranking
+          path: ranking.json

@@ -52,6 +52,7 @@ A Linear source ranks the team's Backlog and Todo issues unless `linear.states` 
 - [docs/config.md](docs/config.md): config keys, Linear states, local overrides, the cache, the allowlist, tokens and keys
 - [docs/cli.md](docs/cli.md): every verb and flag, exit codes, JSON output
 - [docs/library.md](docs/library.md): using the package from TypeScript
+- [docs/github-actions.md](docs/github-actions.md): rank a repository's issues on a schedule with GitHub Actions
 - [ROADMAP.md](ROADMAP.md): deferred work
 
 The agent skill that builds and calibrates rubrics with you ships in `skills/backlog-ranker/`; copy or symlink that folder into `~/.claude/skills/` to install it.
