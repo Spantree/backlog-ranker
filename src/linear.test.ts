@@ -432,6 +432,73 @@ describe("refusals are value-free", () => {
     expect(err2.message).toBe("Linear answered HTTP 502 while listing KIT's pending issues");
   });
 
+  test.each([
+    [
+      "HTTP 400 with a RATELIMITED error",
+      () =>
+        Response.json(
+          { errors: [{ message: `Rate limit exceeded ${TEXT}`, extensions: { code: "RATELIMITED" } }] },
+          { status: 400 },
+        ),
+    ],
+    [
+      "HTTP 429 with a RATELIMITED error",
+      () =>
+        Response.json(
+          { errors: [{ message: `slow down ${SECRET}`, extensions: { code: "RATELIMITED" } }] },
+          { status: 429 },
+        ),
+    ],
+    ["HTTP 429 without a body", () => new Response(`${TEXT}`, { status: 429 })],
+  ])("%s refuses as a rate limit, naming the operation only", async (_name, reply) => {
+    const linear = fakeLinear(reply);
+    const err = await refusalOf(
+      linearTracker({ team: "KIT", apiKey: SECRET, fetch: linear.fetch }).pending(),
+    );
+    expect(err.message).toBe(
+      "Linear rate-limited the request while listing KIT's pending issues; retry later",
+    );
+  });
+
+  test("a request Linear does not answer in time is aborted and refuses naming the time limit", async () => {
+    let signal: AbortSignal | undefined;
+    const fetch = ((_: unknown, init?: RequestInit) => {
+      signal = init?.signal ?? undefined;
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+      });
+    }) as unknown as Fetch;
+    const err = await refusalOf(
+      linearTracker({ team: "KIT", apiKey: SECRET, fetch, timeoutMs: 20 }).issues(["KIT-1"]),
+    );
+    expect(signal?.aborted).toBe(true);
+    expect(err.message).toBe("Linear did not answer within 20 ms while reading KIT-1");
+  });
+
+  test("a reply whose body does not arrive in time refuses as timed out, not as HTTP 200", async () => {
+    const fetch = (async (_: unknown, init?: RequestInit) => {
+      const body = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(`{"data":{"issue":{"title":"${TEXT}`));
+          init?.signal?.addEventListener("abort", () => controller.error(init.signal?.reason));
+        },
+      });
+      return new Response(body, { status: 200 });
+    }) as unknown as Fetch;
+    const err = await refusalOf(
+      linearTracker({ team: "KIT", apiKey: SECRET, fetch, timeoutMs: 20 }).issues(["KIT-1"]),
+    );
+    expect(err.message).toBe("Linear did not answer within 20 ms while reading KIT-1");
+  });
+
+  test("the default time limit is named in seconds", async () => {
+    const fetch = (async () => {
+      throw new DOMException("The operation timed out.", "TimeoutError");
+    }) as unknown as Fetch;
+    const err = await refusalOf(linearTracker({ team: "KIT", apiKey: SECRET, fetch }).issues(["KIT-1"]));
+    expect(err.message).toBe("Linear did not answer within 30 seconds while reading KIT-1");
+  });
+
   test("a network failure says Linear could not be reached", async () => {
     const fetch = (async () => {
       throw new TypeError(`connect failed ${SECRET}`);

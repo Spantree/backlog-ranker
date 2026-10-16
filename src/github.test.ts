@@ -270,6 +270,54 @@ describe("githubTracker on busy repositories", () => {
     );
   });
 
+  const serverTimeout = () =>
+    Response.json({
+      data: null,
+      errors: [
+        {
+          message:
+            "Something went wrong while executing your query. This may be the result of a timeout, or it could be a GitHub bug. Please include `ABCD:1234` when reporting this issue.",
+        },
+      ],
+    });
+
+  test("a page GitHub gave up on with an untyped timeout error is asked again at half the size", async () => {
+    const replies = [serverTimeout, serverTimeout, () => page([issue(1)])];
+    const gh = fakeGitHub(() => (replies.shift() as () => Response)());
+    const tickets = await busy(gh.fetch).pending();
+    expect(tickets.map((t) => t.key)).toEqual(["o/r#1"]);
+    expect(sizes(gh.bodies)).toEqual([50, 25, 12]);
+  });
+
+  test("a server timeout that persists at the smallest size refuses without echoing the reply", async () => {
+    const gh = fakeGitHub(serverTimeout);
+    const err = await caught(busy(gh.fetch).pending());
+    expect(sizes(gh.bodies)).toEqual([50, 25, 12]);
+    expect(err.message).toBe(
+      "GitHub answered HTTP 200 with GraphQL errors (the query timed out) while listing o/r's open issues",
+    );
+    expect(err.message).not.toContain("ABCD");
+  });
+
+  test.each([
+    [
+      "a typed error mentioning a timeout",
+      { type: "FORBIDDEN", message: "timeout while checking access" },
+      null,
+    ],
+    ["an untyped error about something else", { message: "Field 'x' doesn't exist on type 'Issue'" }, null],
+    [
+      "an untyped timeout error alongside data",
+      { message: "Something went wrong while executing your query." },
+      {},
+    ],
+  ])("%s does not shrink the page", async (_, error, data) => {
+    const gh = fakeGitHub(() => Response.json({ data, errors: [error] }));
+    const err = await caught(busy(gh.fetch).pending());
+    expect(sizes(gh.bodies)).toEqual([50]);
+    expect(err.message).toBe("GitHub answered HTTP 200 with GraphQL errors while listing o/r's open issues");
+  });
+
   test("a page that runs out of time is asked again at half the size", async () => {
     const firsts: unknown[] = [];
     const fetch = ((_: unknown, init?: RequestInit) => {

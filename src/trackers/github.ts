@@ -16,7 +16,8 @@ export const GITHUB_GRAPHQL_ENDPOINT = "https://api.github.com/graphql";
  * with dozens of timeline events) push a page past GitHub's resource
  * limits or its gateway timeout, so a refused page is asked again at half
  * the size, down to the smallest, and paging goes on at the size that
- * worked. */
+ * worked. GitHub also reports a query it gave up on as HTTP 200 with an
+ * untyped error naming a timeout; that is a heavy page too. */
 const PAGE_SIZE = 50;
 const MIN_PAGE_SIZE = 12;
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -223,6 +224,22 @@ function timedOut(err: unknown): boolean {
   return e?.name === "TimeoutError" || e?.cause?.name === "TimeoutError";
 }
 
+/** GitHub sometimes gives up on a heavy query with HTTP 200, no data and
+ * an untyped error saying something went wrong while executing it, maybe
+ * a timeout. A typed error (auth, NOT_FOUND, validation) never matches,
+ * nor does a reply that carries data. */
+const SERVER_TIMEOUT = /timeout|timed out|something went wrong while executing your query/i;
+function serverTimeout(err: GraphqlResponseError<unknown>): boolean {
+  const errors = (err.errors ?? []) as { type?: unknown; message?: unknown }[];
+  return (
+    err.data == null &&
+    errors.length > 0 &&
+    errors.every(
+      (e) => e.type === undefined && typeof e.message === "string" && SERVER_TIMEOUT.test(e.message),
+    )
+  );
+}
+
 /** Translates whatever octokit threw into a value-free refusal. */
 function refusalFor(
   err: unknown,
@@ -241,6 +258,12 @@ function refusalFor(
     if (types.includes("RESOURCE_LIMITS_EXCEEDED")) {
       return new GitHubTrackerError(
         `GitHub answered HTTP 200 with GraphQL errors (resource limits exceeded) while ${operation}`,
+        { smaller: true },
+      );
+    }
+    if (serverTimeout(err)) {
+      return new GitHubTrackerError(
+        `GitHub answered HTTP 200 with GraphQL errors (the query timed out) while ${operation}`,
         { smaller: true },
       );
     }

@@ -133,6 +133,17 @@ export function linearKeyHint(apiKeyVar: string): string {
 
 /** Linear also reports a rejected key as a GraphQL error code. */
 const AUTH_CODES = new Set(["AUTHENTICATION_ERROR", "FORBIDDEN"]);
+/** Linear's rate limits answer HTTP 400 (sometimes 429) with this code. */
+const RATE_LIMIT_CODE = "RATELIMITED";
+
+const duration = (ms: number) => (ms >= 1000 && ms % 1000 === 0 ? `${ms / 1000} seconds` : `${ms} ms`);
+
+/** An aborted fetch, or an aborted body read, rejects with the signal's
+ * TimeoutError. */
+function timedOut(err: unknown): boolean {
+  const e = err as { name?: unknown; cause?: { name?: unknown } } | null;
+  return e?.name === "TimeoutError" || e?.cause?.name === "TimeoutError";
+}
 
 function toTicket(node: IssueNode): Ticket {
   const linked = [...node.relations.nodes, ...node.inverseRelations.nodes].filter((r) =>
@@ -206,6 +217,8 @@ export function linearTracker(opts: LinearTrackerOptions): Tracker {
     schema: S,
     missing?: z.infer<S>,
   ): Promise<z.infer<S>> {
+    const late = () =>
+      new LinearTrackerError(`Linear did not answer within ${duration(timeoutMs)} while ${operation}`);
     let res: Response;
     try {
       res = await fetchFn(LINEAR_GRAPHQL_ENDPOINT, {
@@ -214,7 +227,8 @@ export function linearTracker(opts: LinearTrackerOptions): Tracker {
         body: JSON.stringify({ query, variables }),
         signal: AbortSignal.timeout(timeoutMs),
       });
-    } catch {
+    } catch (err) {
+      if (timedOut(err)) throw late();
       throw new LinearTrackerError(`could not reach Linear while ${operation}`);
     }
     const refused = () =>
@@ -225,9 +239,17 @@ export function linearTracker(opts: LinearTrackerOptions): Tracker {
       await res.body?.cancel();
       throw refused();
     }
-    const raw: unknown = await res.json().catch(() => undefined);
+    // The deadline covers the body read too; a body that is not JSON
+    // reads as no envelope and refuses by its status below.
+    const raw: unknown = await res.json().catch((err: unknown) => {
+      if (timedOut(err)) throw late();
+      return undefined;
+    });
     const envelope = envelopeSchema.safeParse(raw);
     const errors = envelope.success ? (envelope.data.errors ?? []) : [];
+    if (res.status === 429 || errors.some((e) => e.extensions?.code === RATE_LIMIT_CODE)) {
+      throw new LinearTrackerError(`Linear rate-limited the request while ${operation}; retry later`);
+    }
     if (errors.some((e) => typeof e.extensions?.code === "string" && AUTH_CODES.has(e.extensions.code))) {
       throw refused();
     }
