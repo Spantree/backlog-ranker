@@ -11,7 +11,7 @@
 - `src/rubric.ts`, `src/state.ts`, `src/score.ts`, `src/compose.ts`, `src/tiebreak.ts`, `src/kendall.ts`, `src/cache.ts`, `src/table.ts`: rubric parsing, state building, scoring, composition, tie-break, tau, the answer cache and rendering.
 - `src/engine.ts`: the engine-neutral decision interface. `src/jev/`: the Jev adapter over `@typesafe-ai/sdk` and the backend table.
 - `src/trackers/`: the `Tracker` interface, the GitHub and Linear adapters, and `trackerFor` (`index.ts`), which picks one for a source.
-- `src/fixtures/`: the fixture rubric, the GitHub issue page, the Linear team's issues and workflow states (`linear-issues.json`, `linear-workflow-states.json`), recorded Jev responses (`jev/<hash16>.json`), `replay.ts` (the offline fetch the suite runs on) and `project.ts` (the CLI suites' fixture project, io capture and temp roots).
+- `src/fixtures/`: the fixture rubric, the GitHub issue page, the Linear team's issues and workflow states (`linear-issues.json`, `linear-workflow-states.json`), recorded Jev responses (`jev/<hash16>.json`), `replay.ts` (the offline fetch the suite runs on), `capture.ts` (the capture script's testable parts) and `project.ts` (the CLI suites' fixture project, io capture and temp roots).
 - `rubrics/impact-roi.yaml`: the shipped example rubric. `skills/backlog-ranker/SKILL.md`: the shipped agent skill.
 - `scripts/capture-fixtures.ts`: re-records the Jev fixtures. `docs/`: user docs, shipped in the package (`docs/agents/` is not). `.scratch/`: local issues and specs, never shipped.
 
@@ -24,7 +24,7 @@ mise exec -- bun install
 mise exec -- bun run typecheck   # src and scripts/
 mise exec -- bun run lint        # biome
 mise exec -- bun test
-mise exec -- bun run build       # tsc to dist/
+mise exec -- bun run build       # empties dist/, then tsc; npm pack and publish run it (prepack)
 mise exec -- npm pack --dry-run  # check what ships
 ```
 
@@ -32,9 +32,9 @@ mise exec -- npm pack --dry-run  # check what ships
 
 - Read-only toward GitHub and Linear. Nothing in the package writes a label, comment, field or anything else to a tracker.
 - Allowlist first. Every verb checks the source against `sources` in the config before reading a rubric, building a tracker or engine, reading a key, or sending a request. A refused source sends nothing and writes no cache. `--allow-once` never writes config. Never add a source to an allowlist to get a test or a run through.
-- Only title, body and labels leave the tracker, plus facts computed in code. Errors name the backend or operation and the HTTP status, never a key, a token or issue text.
+- Only title, body and labels leave the tracker, plus facts computed in code. Errors name the backend or operation and the HTTP status, never a key, a token or issue text; a failed decision is prefixed with its issue key (or tie-break pair). The Jev adapter breaks the SDK's image-reference token (`<image:` + 32 hex) in everything it sends, which leaves any state without one, and so its hash, unchanged.
 - No network in tests. The suite runs on `src/fixtures/replay.ts`, which serves the recorded GitHub page, the Linear team and the Jev responses and counts requests per destination (`github`, `linear`, `jev`, `other`).
-- Recorded fixtures replay by state hash. A Jev recording is found by the first 16 hex digits of the SHA-256 of the state sent; a state with no recording answers 404, so a changed state fails loudly instead of replaying a stale answer. The state hash excludes the issue key.
+- Recorded fixtures replay by state hash. A Jev recording is found by the first 16 hex digits of the SHA-256 of the state sent; a state with no recording answers 404, so a changed state fails loudly instead of replaying a stale answer. A request for another Jev version than the recording's served model also answers 404. The state hash excludes the issue key.
 - The model version is pinned; answers from any other served version are refused.
 
 ## Re-recording fixtures
@@ -42,10 +42,11 @@ mise exec -- npm pack --dry-run  # check what ships
 The Linear team's Backlog and Todo issues carry the same tickets as the GitHub page (`src/github-fixture.test.ts` checks it), so both replay the same recordings: change them together. Re-record after changing `src/fixtures/rubric.yaml`, `src/fixtures/github-issues.json`, or anything that changes the state sent (its fields, the age buckets, the prompt budget):
 
 ```bash
-OPENROUTER_API_KEY=... mise exec -- bun scripts/capture-fixtures.ts [--model jev-1.13]
+OPENROUTER_API_KEY=... mise exec -- bun scripts/capture-fixtures.ts
+OPENROUTER_API_KEY=... mise exec -- bun scripts/capture-fixtures.ts --model jev-1.13 --out <dir>
 ```
 
-It runs scoring and a top-10 tie-break over the fixture issues against a cold cache in a temporary directory, through OpenRouter, with ages pinned to `FIXTURE_NOW`, and writes each response to `src/fixtures/jev/<hash16>.json` with its `id` removed. It costs real requests: run it only when asked, then run the suite and commit the new recordings with the change that required them.
+It runs scoring and a top-10 tie-break over the fixture issues against a cold cache in a temporary directory, through OpenRouter, with ages pinned to `FIXTURE_NOW`, and writes each response to `src/fixtures/jev/<hash16>.json` with its `id` removed. Responses are held in memory and written only after the whole run has passed the engine's checks, so a failed run leaves the folder untouched. `src/fixtures/jev/` holds the default model's (jev-1.14) recordings only: a recording is named by state hash alone, so a capture with any other `--model` refuses to run without an `--out <dir>` elsewhere, and replay answers 404 when the model a request names is not the recording's. It costs real requests: run it only when asked, then run the suite and commit the new recordings with the change that required them.
 
 ## The Bun SDK shim
 

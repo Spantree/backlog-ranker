@@ -5,13 +5,16 @@
  * every request by destination, so a test can assert that a refusal sent
  * nothing at all. Jev recordings are keyed by the first 16 hex digits of
  * the state hash; a state with no recording answers 404, so a changed
- * state fails loudly instead of replaying a stale answer.
+ * state fails loudly instead of replaying a stale answer. So does a
+ * request for another Jev version than the recording's served model, so
+ * a run pinned to jev-1.13 never replays a jev-1.14 answer as its own.
  */
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { BACKENDS } from "../jev/backends.js";
+import { BACKENDS, JEV_MODELS, type JevModel } from "../jev/backends.js";
+import { servesPinnedModel } from "../jev/validate.js";
 import { stateHash } from "../state.js";
 import { GITHUB_GRAPHQL_ENDPOINT } from "../trackers/github.js";
 import { LINEAR_GRAPHQL_ENDPOINT } from "../trackers/linear.js";
@@ -83,6 +86,20 @@ function linearReply(query: string, variables: LinearVariables): Response {
   });
 }
 
+/** The Jev version a request names, in any backend's request spelling
+ * (`jev-1.14` or `jev-1.14.0`). */
+export function requestedJevModel(spelling: string): JevModel | undefined {
+  return JEV_MODELS.find((m) => Object.values(BACKENDS).some((b) => b.requestSpelling(m) === spelling));
+}
+
+/** The Jev version a response reports, by the engine's own pinned-model
+ * check over every backend's spellings (`typesafe/jev-1.14-20261014`). */
+export function servedJevModel(served: string): JevModel | undefined {
+  return JEV_MODELS.find((m) =>
+    Object.values(BACKENDS).some((b) => servesPinnedModel(b.servedSpellings(m), served)),
+  );
+}
+
 const JEV_URLS = new Set(Object.values(BACKENDS).map((b) => `${b.baseURL}/v1/systemone`));
 
 function urlOf(input: string | URL | Request): string {
@@ -133,10 +150,16 @@ export function replayFetch(options: ReplayOptions = {}): { fetch: ReplayFetch; 
       if (JEV_URLS.has(url)) {
         counts.jev++;
         if (options.jevStatus !== undefined) return json({ error: "replayed status" }, options.jevStatus);
-        const { state } = (await bodyOf(init)) as { state: unknown };
+        const { state, model } = (await bodyOf(init)) as { state: unknown; model: unknown };
         const file = join(FIXTURE_DIR, "jev", jevFixtureName(state));
         if (!existsSync(file)) return json({ error: "no recorded answer for this state" }, 404);
-        return json(readFileSync(file, "utf8"));
+        const recorded = readFileSync(file, "utf8");
+        const served = (JSON.parse(recorded) as { model?: unknown }).model;
+        const asked = typeof model === "string" ? requestedJevModel(model) : undefined;
+        if (asked === undefined || typeof served !== "string" || servedJevModel(served) !== asked) {
+          return json({ error: "the recorded answer for this state is from another model" }, 404);
+        }
+        return json(recorded);
       }
       counts.other++;
       throw new Error(`the fixture network has no route for ${url}`);

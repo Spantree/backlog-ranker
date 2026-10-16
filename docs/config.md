@@ -112,7 +112,7 @@ A rejected key (HTTP 401 or 403, or Linear's authentication error) refuses namin
 
 ### A model provider key
 
-Export `TYPESAFE_API_KEY` for `backend: typesafe` or `OPENROUTER_API_KEY` for `backend: openrouter`, or point `keys.typesafe` / `keys.openrouter` at another variable. Engine errors name the backend and HTTP status, never the key or the issue text.
+Export `TYPESAFE_API_KEY` for `backend: typesafe` or `OPENROUTER_API_KEY` for `backend: openrouter`, or point `keys.typesafe` / `keys.openrouter` at another variable. Engine errors name the backend and HTTP status, and the issue key (or the two keys of a tie-break pair) the request was about, never the API key or the issue text. Issue text that quotes an SDK image token (`<image:` and 32 hex digits) is sent with a space after the colon, so the SDK does not take it for an image to attach.
 
 ## The cache
 

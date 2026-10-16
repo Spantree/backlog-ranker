@@ -205,7 +205,7 @@ export const middleEngine: DecisionEngine = {
 
 ## Errors and guards
 
-Every error the tool expects you to fix is a `RefusalError`: a usage or config problem, an unlisted source, an unset key, a failed request. Subclasses name the area: `ConfigError`, `LoaderError`, `RubricError`, `SourceError`, `GitHubTrackerError`, `LinearTrackerError`, `JevError` (with the HTTP `status` when there was one) and `PromptBudgetError`. Their messages never contain a key, a token or issue text.
+Every error the tool expects you to fix is a `RefusalError`: a usage or config problem, an unlisted source, an unset key, a failed request. Subclasses name the area: `ConfigError`, `LoaderError`, `RubricError`, `SourceError`, `GitHubTrackerError`, `LinearTrackerError`, `JevError` (with the HTTP `status` when there was one) and `PromptBudgetError`. Their messages never contain a key, a token or issue text. A failed decision is prefixed with the issue key it was about (`KIT-12: the openrouter backend answered HTTP 503`), or with both keys for a tie-break pair.
 
 Use `isRefusal(err)` rather than `instanceof`: it checks a registry symbol, so it recognises refusals from another copy of the package (a symlinked or duplicated install). `isHelpRequest(err)` does the same for the `HelpRequest` a `--help` throws.
 
