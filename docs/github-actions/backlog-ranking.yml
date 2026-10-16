@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Pin the version you tested; a new release can change the ranking.
-      BACKLOG_RANKER: "@feniix/backlog-ranker@0.1.2"
+      BACKLOG_RANKER: "@feniix/backlog-ranker@0.1.3"
       RUBRIC: impact-roi
       SOURCE: github:${{ github.repository }}
       GITHUB_TOKEN: ${{ github.token }}
