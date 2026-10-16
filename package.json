@@ -4,6 +4,12 @@
   "description": "Rank, calibrate and explain a backlog with a rubric and a decision model",
   "license": "MIT",
   "author": "Sebastian Otaegui",
+  "contributors": [
+    {
+      "name": "Spantree",
+      "url": "https://spantree.net"
+    }
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Spantree/backlog-ranker.git"
