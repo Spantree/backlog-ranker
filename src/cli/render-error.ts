@@ -89,6 +89,16 @@ export function renderError(err: unknown, options: { debug: boolean }): string {
     // how some code spells "none". A thrown `null` still prints above.
     if (current === null) break;
   }
+  // A run that failed and then could not flush its cache carries the
+  // flush failure beside its own error (api.ts); name it after the chain.
+  const flushError =
+    typeof err === "object" && err !== null
+      ? safeRead(() => (err as { flushError?: unknown }).flushError)
+      : undefined;
+  if (flushError !== undefined) {
+    const message = flushError instanceof Error ? flushError.message : String(flushError);
+    lines.push(`the answer cache could not be saved either: ${message}`);
+  }
   if (withheld) lines.push(DEBUG_HINT);
   return lines.join("\n");
 }

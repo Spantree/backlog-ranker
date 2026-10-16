@@ -161,4 +161,13 @@ describe("renderError", () => {
     expect(renderError(new Error("x", { cause: "y" }), { debug: false })).toContain("caused by: y");
     expect(renderError(null, { debug: false })).toBe("null");
   });
+
+  test("a run's error that also failed to flush the cache names both, the run's first", () => {
+    const err = new Error("the run failed");
+    Object.defineProperty(err, "flushError", { value: new Error("ENOSPC: disk full") });
+    const text = renderError(err, { debug: false });
+    expect(text).toStartWith("Error: the run failed\n");
+    expect(text).toContain("the answer cache could not be saved either: ENOSPC: disk full");
+    expect(renderError(new Error("x"), { debug: false })).not.toContain("answer cache");
+  });
 });
