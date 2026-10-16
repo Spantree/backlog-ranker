@@ -40,6 +40,28 @@ describe("help", () => {
       expect(c.err()).toBe("");
     }
   });
+
+  test.each(["rank", "calibrate", "explain"])(
+    "%s: --help wins over an unknown flag or a flag missing its value, in any order",
+    async (verb) => {
+      for (const argv of [
+        ["--help", "--bogus"],
+        ["--bogus", "-h"],
+        ["-h", "--rubric"],
+      ]) {
+        const c = capture();
+        expect(await run([verb, ...argv], c.io)).toBe(0);
+        expect(c.out()).toStartWith(`usage: backlog-ranker ${verb}`);
+        expect(c.err()).toBe("");
+      }
+    },
+  );
+
+  test("an unknown flag without --help is still refused", async () => {
+    const c = capture();
+    expect(await run(["rank", "--bogus"], c.io)).toBe(1);
+    expect(c.err()).toContain("Unknown option '--bogus'");
+  });
 });
 
 describe("refusals", () => {
