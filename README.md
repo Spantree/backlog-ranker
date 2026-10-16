@@ -12,7 +12,7 @@ Node 22 or later, or Bun.
 
 ## Try it without config
 
-Rank a public repository with the shipped example rubric. `--allow-once` admits the source for this run only, prints what leaves the machine, and writes nothing to config.
+Rank a public repository with the shipped example rubric. `--allow-once` admits the source for this run only, prints what leaves the machine, and writes nothing to config, though it does create the answer cache in `.backlog-ranker/cache/` under the project root (or the working directory); see the gitignore lines in [docs/config.md](docs/config.md#local-overrides).
 
 ```bash
 gh auth login
