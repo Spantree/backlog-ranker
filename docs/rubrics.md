@@ -128,7 +128,7 @@ Rows are ordered pinned first, then normal rows, then sunk rows, each by composi
 
 ## Tie-break
 
-`--tiebreak n` (1 to 10) asks the model to compare every pair in the top `n` rows directly, with `tiebreak_question` or, when absent, a question built from every criterion's wording, levels and direction (never its weight, so a `--weight` override does not change the question). Each pair is asked in both orders and the two answers averaged, so option-order bias cancels. Rows are reordered by summed win probability, inside the pinned, normal and sunk groups separately: pairs are only asked within a group, so a pin always holds and a sunk row never rises above a normal one.
+`--tiebreak n` (1 to 10) asks the model to compare every pair in the top `n` rows directly, with `tiebreak_question` or, when absent, a question built from every criterion's wording, levels and direction (never its weight, so a `--weight` override does not change the question). Each pair is asked in both orders and the two answers averaged, so option-order bias cancels. When a pair's two bodies overflow the prompt budget, a body shorter than half the room is sent whole and the other gets the rest; two long bodies are cut to equal shares, each marked once. Rows are reordered by summed win probability, inside the pinned, normal and sunk groups separately: pairs are only asked within a group, so a pin always holds and a sunk row never rises above a normal one.
 
 ## Calibrating with a hand ranking
 

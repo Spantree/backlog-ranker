@@ -73,25 +73,37 @@ export function stateBytes(state: unknown): number {
 }
 
 /** Bodies, as `toState` built them, cut so the whole serialized state
- * plus `reservedBytes` (the longest question) fits the budget. Returns
- * null when even empty bodies cannot fit: the question is too long. */
+ * plus `reservedBytes` (the longest question) fits the budget. Room is
+ * water-filled: bodies shorter than an even share are kept whole and
+ * what they leave is split evenly among the rest, which are cut. A body
+ * already cut while scoring is cut again from its text, so it never
+ * carries two notes. Returns null when even empty bodies cannot fit: the
+ * question is too long. */
 export function fitBodies(
   bodies: readonly string[],
   shellBytes: number,
   reservedBytes: number,
 ): { bodies: string[]; clipped: boolean[] } | null {
-  const room = PROMPT_BYTE_BUDGET - reservedBytes - shellBytes;
+  let room = PROMPT_BYTE_BUDGET - reservedBytes - shellBytes;
+  // JSON escaping can grow a byte up to six; budget the escaped form.
   const sizes = bodies.map((b) => utf8Bytes(JSON.stringify(b)) - 2);
   if (sizes.reduce((a, b) => a + b, 0) <= room)
     return { bodies: [...bodies], clipped: bodies.map(() => false) };
   const noteBytes = utf8Bytes(JSON.stringify(TRUNCATION_NOTE)) - 2;
-  const perBody = Math.floor(room / bodies.length) - noteBytes;
+  const clipped = bodies.map(() => true);
+  let left = bodies.length;
+  for (const i of sizes.map((_, i) => i).sort((x, y) => (sizes[x] ?? 0) - (sizes[y] ?? 0))) {
+    const size = sizes[i] ?? 0;
+    if (size > Math.floor(room / left)) break;
+    clipped[i] = false;
+    room -= size;
+    left--;
+  }
+  const perBody = Math.floor(room / left) - noteBytes;
   if (perBody < 0) return null;
-  // JSON escaping can grow a byte up to six; budget the escaped form.
-  const clipped = sizes.map((size) => size > perBody);
   const out = bodies.map((b, i) => {
     if (!clipped[i]) return b;
-    let cut = clipToBytes(b, perBody);
+    let cut = clipToBytes(b.endsWith(TRUNCATION_NOTE) ? b.slice(0, -TRUNCATION_NOTE.length) : b, perBody);
     while (utf8Bytes(JSON.stringify(cut)) - 2 > perBody)
       cut = clipToBytes(cut, Math.floor(utf8Bytes(cut) * 0.9));
     return cut + TRUNCATION_NOTE;
