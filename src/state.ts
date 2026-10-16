@@ -26,10 +26,13 @@ export const AGE_BUCKETS = [
   [91, "under a quarter"],
   [365, "under a year"],
 ] as const;
-export type AgeBucket = (typeof AGE_BUCKETS)[number][1] | "a year or more";
+export type AgeBucket = (typeof AGE_BUCKETS)[number][1] | "a year or more" | "unknown";
 
+/** A creation date that does not parse is `unknown`, said as such,
+ * rather than read as old: NaN fails every bucket's comparison. */
 export function ageBucket(createdAt: string, now: Date): AgeBucket {
   const days = (now.getTime() - new Date(createdAt).getTime()) / 86_400_000;
+  if (Number.isNaN(days)) return "unknown";
   for (const [limit, label] of AGE_BUCKETS) if (days < limit) return label;
   return "a year or more";
 }
