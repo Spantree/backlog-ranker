@@ -42,7 +42,6 @@ The npm side, as configured on the package's settings page:
 
 When a publish fails with `ENEEDAUTH` or `E404`, the verbose log's `oidc` lines carry npm's real reason: `OIDC token exchange error - package not found` means the trusted publisher does not match the run (owner, repository, workflow file or environment).
 
-
 ## Invariants
 
 - Read-only toward GitHub and Linear. Nothing in the package writes a label, comment, field or anything else to a tracker.
