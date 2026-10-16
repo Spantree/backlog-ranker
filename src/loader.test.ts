@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { findProjectRoot } from "./config.js";
 import { isRefusal } from "./errors.js";
 import { replayFetch } from "./fixtures/replay.js";
 import { loadProject } from "./loader.js";
@@ -120,6 +121,27 @@ describe("loadProject", () => {
     const deep = join(root, "packages", "a", "src");
     mkdirSync(deep, { recursive: true });
     expect(loadProject(deep, {}).projectRoot).toBe(root);
+  });
+
+  test.each([
+    ["config.yaml", "config.yaml"],
+    ["config.local.yaml", "config.local.yaml"],
+    ["rubrics/", "rubrics/impact-roi.yaml"],
+  ])(".backlog-ranker/%s marks a project root", (_, file) => {
+    const inner = join(root, "inner");
+    const path = join(inner, ".backlog-ranker", file);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, "sources: []\nbackend: typesafe\n");
+    mkdirSync(join(inner, "src"));
+    expect(findProjectRoot(join(inner, "src"))).toBe(inner);
+  });
+
+  test("a .backlog-ranker/ holding only a cache is not a root marker", () => {
+    writeConfig("config.yaml", "sources: []\nbackend: typesafe\n");
+    const inner = join(root, "work");
+    mkdirSync(join(inner, ".backlog-ranker", "cache"), { recursive: true });
+    expect(findProjectRoot(inner)).toBe(root);
+    expect(loadProject(inner, {}).projectRoot).toBe(root);
   });
 
   test("the walk stops at the nearest .git, so an outer config is not borrowed", () => {

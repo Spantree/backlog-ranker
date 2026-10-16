@@ -4,7 +4,7 @@ Every verb reads the project's committed policy from `.backlog-ranker/config.yam
 
 ## Project root
 
-The project root is the nearest ancestor of the working directory that holds a `.backlog-ranker/` directory or a `.git` entry; if none does, the working directory itself. Config, rubrics and the cache are all found under `<root>/.backlog-ranker/`, so the verbs work from any subdirectory.
+The project root is the nearest ancestor of the working directory that holds `.backlog-ranker/config.yaml`, `.backlog-ranker/config.local.yaml`, a `.backlog-ranker/rubrics/` directory, or a `.git` entry; if none does, the working directory itself. A `.backlog-ranker/` holding only a cache (as an `--allow-once` run outside any project leaves) does not mark a root. Config, rubrics and the cache are all found under `<root>/.backlog-ranker/`, so the verbs work from any subdirectory.
 
 ## Schema
 
