@@ -9,6 +9,7 @@
  * failure rendering in `cli/render-error.ts` and the reports in `table.ts`.
  */
 
+import { sep } from "node:path";
 import { calibrateBacklog, explainTicket, rankBacklog } from "./api.js";
 import { type AnswerCache, openCache } from "./cache.js";
 import { isVerb, parseVerbArgs, USAGE, VERB_USAGE, VERBS, type Verb, type VerbFlags } from "./cli/flags.js";
@@ -19,7 +20,7 @@ import type { DecisionEngine } from "./engine.js";
 import { HelpRequest, isHelpRequest, RefusalError } from "./errors.js";
 import { type LoadOptions, loadProject, type Project } from "./loader.js";
 import { type LoadedRubric, loadRubricArg } from "./rubric.js";
-import { assertAllowed, parseIssueKey, parseSource, type SourceRef } from "./source.js";
+import { assertAllowed, parseIssueKey, parseSource, type SourceRef, sourceSpec } from "./source.js";
 import { type RunHeader, renderCalibrate, renderExplain, renderTable } from "./table.js";
 import { MAX_TIEBREAK } from "./tiebreak.js";
 import type { Tracker } from "./trackers/tracker.js";
@@ -89,6 +90,16 @@ function allowOnceNotice(source: SourceRef, backend: string): string {
   );
 }
 
+/** The line on stderr when the source is allowed only by a
+ * `config.local.yaml` entry the committed config lacks: an allowlist
+ * change that was never reviewed is never silent either. */
+function unreviewedNotice(spec: string, configPath: string, backend: string): string {
+  return (
+    `${spec} is allowed only by ${configPath.split(sep).join("/")}, not by the committed ` +
+    `.backlog-ranker/config.yaml; its issues will be sent to ${backend} on an unreviewed allowlist entry\n`
+  );
+}
+
 /**
  * The pipeline every verb shares: resolve the project, check the
  * allowlist, read the rubric, build the tracker then the engine, open the
@@ -110,6 +121,10 @@ async function prepare(
   // Announced only once both keys were read, so a run that refuses on a
   // missing key never claimed a send; still before any request leaves.
   if (run.load?.allowOnce !== undefined) io.stderr(allowOnceNotice(source, project.backend));
+  const spec = sourceSpec(source);
+  if (project.unreviewedSources?.includes(spec) === true) {
+    io.stderr(unreviewedNotice(spec, project.configPath, project.backend));
+  }
   const cache = openCache(project.projectRoot, engine.id, engine.model, deps.now);
   const header: RunHeader = {
     rubricPath: loaded.path,

@@ -65,7 +65,7 @@ Each run first reads the team's workflow states. An entry that matches none of t
 
 ## Local overrides
 
-`.backlog-ranker/config.local.yaml` replaces `config.yaml` outright when it exists; the two are not merged. Rubrics work the same way: `<name>.local.yaml` replaces `<name>.yaml`. The run header names the file that was read, so an override is never silent. Keep both out of git:
+`.backlog-ranker/config.local.yaml` replaces `config.yaml` outright when it exists; the two are not merged. Rubrics work the same way: `<name>.local.yaml` replaces `<name>.yaml`. The run header names the file that was read, so an override is never silent. A source that `config.local.yaml` lists and the committed `config.yaml` does not (or every source it lists, when there is no `config.yaml`) never went through review, so every verb that uses one prints a line on stderr naming the source, the local file and the backend, once the keys are read and before any request. Keep both out of git:
 
 ```gitignore
 .backlog-ranker/cache/
@@ -74,7 +74,7 @@ Each run first reads the team's workflow states. An entry that matches none of t
 
 ## The allowlist and what leaves the machine
 
-Before reading a rubric, building a tracker or sending any request, every verb checks the source against `sources`. Matching ignores case. An unlisted source is refused with the config key and the sources that are listed, and nothing is sent. Adding a source is a committed config change, so the decision to send a repository's or a team's issues to a provider is reviewed like any other change.
+Before reading a rubric, building a tracker or sending any request, every verb checks the source against `sources`. Matching ignores case. An unlisted source is refused with the config key and the sources that are listed, and nothing is sent. Adding a source is a committed config change, so the decision to send a repository's or a team's issues to a provider is reviewed like any other change. A source added only in `config.local.yaml` still works, but each run that uses it says so on stderr (see [Local overrides](#local-overrides)).
 
 For an allowed source:
 

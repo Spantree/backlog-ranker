@@ -220,3 +220,35 @@ describe("rank --allow-once", () => {
     expect(counts).toEqual({ github: 0, linear: 0, jev: 0, other: 0 });
   });
 });
+
+describe("a source config.local.yaml adds", () => {
+  function writeLocal(text: string): void {
+    mkdirSync(join(root, ".backlog-ranker"), { recursive: true });
+    writeFileSync(join(root, ".backlog-ranker", "config.local.yaml"), text);
+  }
+
+  const NOTICE =
+    "github:kit/kit is allowed only by .backlog-ranker/config.local.yaml, not by the committed " +
+    ".backlog-ranker/config.yaml; its issues will be sent to openrouter on an unreviewed allowlist entry\n";
+
+  test("ranks, saying on stderr that the entry was never reviewed", async () => {
+    writeConfig("sources:\n  - github:other/repo\nbackend: openrouter\n");
+    writeLocal("sources:\n  - github:other/repo\n  - github:kit/kit\nbackend: openrouter\n");
+    expect(await rank("-r", RUBRIC_FILE, "-s", "github:kit/kit")).toBe(0);
+    expect(stderr()).toBe(NOTICE);
+    expect(counts.github).toBe(1);
+  });
+
+  test("says so with no committed config at all", async () => {
+    writeLocal("sources:\n  - github:kit/kit\nbackend: openrouter\n");
+    expect(await rank("-r", RUBRIC_FILE, "-s", "github:kit/kit")).toBe(0);
+    expect(stderr()).toBe(NOTICE);
+  });
+
+  test("is silent for a source the committed config also lists", async () => {
+    writeConfig("sources:\n  - github:kit/kit\nbackend: openrouter\n");
+    writeLocal("sources:\n  - github:kit/kit\n  - github:mine/fork\nbackend: openrouter\n");
+    expect(await rank("-r", RUBRIC_FILE, "-s", "github:kit/kit")).toBe(0);
+    expect(stderr()).toBe("");
+  });
+});

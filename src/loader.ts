@@ -44,6 +44,10 @@ export interface Project {
   config: Config;
   /** The allowlist as the config spells it. */
   sources: readonly string[];
+  /** Canonical specs a `config.local.yaml` lists that the committed
+   * `config.yaml` does not: allowed, but never reviewed. Absent or empty
+   * when the committed file was read. */
+  unreviewedSources?: readonly string[];
   allowlistKey: string;
   /** Where the engine is served, for the run header. */
   backend: string;
@@ -82,7 +86,10 @@ function present(value: string | undefined): value is string {
 /** The config file, or with `--allow-once --backend` and no file an
  * ephemeral one admitting only that source. Nothing is ever written.
  * With a file, the committed config chooses the backend. */
-function resolveConfig(projectRoot: string, options: LoadOptions): Pick<LoadedConfig, "config" | "path"> {
+function resolveConfig(
+  projectRoot: string,
+  options: LoadOptions,
+): Pick<LoadedConfig, "config" | "path" | "unreviewedSources"> {
   const found = readConfig(projectRoot);
   if (found !== undefined) {
     if (options.backend !== undefined) {
@@ -107,6 +114,7 @@ function resolveConfig(projectRoot: string, options: LoadOptions): Pick<LoadedCo
       keys: { ...DEFAULT_KEY_VARS },
     },
     path: NO_CONFIG_PATH,
+    unreviewedSources: [],
   };
 }
 
@@ -128,6 +136,7 @@ export function loadProject(
     configPath: loaded.path,
     config,
     sources,
+    unreviewedSources: loaded.unreviewedSources,
     allowlistKey,
     backend: config.backend,
     engine() {
