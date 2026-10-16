@@ -20,7 +20,7 @@ import type { DecisionEngine } from "./engine.js";
 import { RefusalError } from "./errors.js";
 import type { BackendName } from "./jev/backends.js";
 import { createJevEngine } from "./jev/index.js";
-import { assertAllowed, type SourceRef } from "./source.js";
+import { assertAllowed, type SourceRef, sourceSpec } from "./source.js";
 import { tokenHint } from "./trackers/github.js";
 import { trackerFor } from "./trackers/index.js";
 import { linearKeyHint } from "./trackers/linear.js";
@@ -101,7 +101,11 @@ function resolveConfig(projectRoot: string, options: LoadOptions): Pick<LoadedCo
     );
   }
   return {
-    config: { sources: [options.allowOnce.spec], backend: options.backend, keys: { ...DEFAULT_KEY_VARS } },
+    config: {
+      sources: [sourceSpec(options.allowOnce)],
+      backend: options.backend,
+      keys: { ...DEFAULT_KEY_VARS },
+    },
     path: NO_CONFIG_PATH,
   };
 }
@@ -115,7 +119,7 @@ export function loadProject(
   const loaded = resolveConfig(projectRoot, options);
   const { config } = loaded;
   const sources =
-    options.allowOnce === undefined ? config.sources : [...config.sources, options.allowOnce.spec];
+    options.allowOnce === undefined ? config.sources : [...config.sources, sourceSpec(options.allowOnce)];
   const fetchOpt = options.fetch === undefined ? {} : { fetch: options.fetch };
   const allowlistKey = allowlistKeyFor(loaded.path);
   let engine: DecisionEngine | undefined;
@@ -147,6 +151,8 @@ export function loadProject(
     tracker(source) {
       // Defence for library callers: the CLI checks first, so its refusal
       // precedes the rubric read; nothing is built for an unlisted source.
+      // The check decides on the ref's owner/repo or team, what the
+      // tracker will read, never on the caller's `spec` string.
       assertAllowed(source, sources, allowlistKey);
       const tokenEnvVar = config.keys[source.kind];
       const token = env[tokenEnvVar];
@@ -155,12 +161,17 @@ export function loadProject(
         throw new LoaderError(`${tokenEnvVar} is not set. ${hint}`);
       }
       const states = config.linear?.states;
-      return trackerFor(source, {
-        token,
-        tokenEnvVar,
-        ...fetchOpt,
-        ...(states === undefined ? {} : { linearStates: states }),
-      });
+      // The tracker is built from the ref with its spec canonicalised, so
+      // the source it reports is the one it reads and was admitted.
+      return trackerFor(
+        { ...source, spec: sourceSpec(source) },
+        {
+          token,
+          tokenEnvVar,
+          ...fetchOpt,
+          ...(states === undefined ? {} : { linearStates: states }),
+        },
+      );
     },
   };
 }

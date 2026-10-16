@@ -30,7 +30,7 @@ console.log("held:", result.ranking.held.map((row) => row.key));
 console.log(result.stats.requests, "requests,", result.stats.cachedAnswers, "answers from cache");
 ```
 
-`Project` carries `projectRoot`, `configPath`, `config`, `sources`, `allowlistKey`, `backend`, `engine()` and `tracker(source)`. `engine()` refuses when the backend's key variable is unset. `tracker()` refuses, in order, a source not on the allowlist (with the same wording as `assertAllowed`) and an unset key variable for the source's tracker (`keys.github` for a `github:` source, `keys.linear` for a `linear:` one); a Linear tracker gets the config's `linear.states`. `LoadOptions` takes `allowOnce` (a `SourceRef` admitted for this project object only), `backend` and `fetch` (a replacement for the global fetch, used by tests).
+`Project` carries `projectRoot`, `configPath`, `config`, `sources`, `allowlistKey`, `backend`, `engine()` and `tracker(source)`. `engine()` refuses when the backend's key variable is unset. `assertAllowed` and `tracker()` decide on what the tracker will read: the ref's `owner` and `repo` (or `team`), canonicalised by `sourceSpec(ref)` and matched case-insensitively, never the ref's own `spec` string. `tracker()` refuses, in order, a source not on the allowlist (with the same wording as `assertAllowed`) and an unset key variable for the source's tracker (`keys.github` for a `github:` source, `keys.linear` for a `linear:` one); a Linear tracker gets the config's `linear.states`. `LoadOptions` takes `allowOnce` (a `SourceRef` admitted for this project object only), `backend` and `fetch` (a replacement for the global fetch, used by tests).
 
 ## Building the pieces yourself
 
@@ -226,4 +226,4 @@ try {
 
 ## Building blocks
 
-Also exported: `parseRubric`, `loadRubric`, `loadRubricFile`, `withWeights`, `rubricHash`; `scoreTickets`, `pool`; `rank`, `compositeOf`, `rubricQuestions`; `FACT_NAMES`, `ticketFacts`; `tiebreak`, `MAX_TIEBREAK`; `kendallTau`; `toState`, `stateHash`, `canonicalJson` and the prompt budget helpers; `parseSource`, `parseIssueKey` (`owner/repo#123` or `TEAM-123`), `issueKeyIn`, `assertAllowed`; `loadConfig`, `parseConfig`, `configSchema`, `findProjectRoot`; `BACKENDS`, `JEV_MODELS`, `DEFAULT_JEV_MODEL`; `renderTable`, `renderExplain`.
+Also exported: `parseRubric`, `loadRubric`, `loadRubricFile`, `withWeights`, `rubricHash`; `scoreTickets`, `pool`; `rank`, `compositeOf`, `rubricQuestions`; `FACT_NAMES`, `ticketFacts`; `tiebreak`, `MAX_TIEBREAK`; `kendallTau`; `toState`, `stateHash`, `canonicalJson` and the prompt budget helpers; `parseSource`, `parseIssueKey` (`owner/repo#123` or `TEAM-123`), `issueKeyIn`, `sourceSpec`, `assertAllowed`; `loadConfig`, `parseConfig`, `configSchema`, `findProjectRoot`; `BACKENDS`, `JEV_MODELS`, `DEFAULT_JEV_MODEL`; `renderTable`, `renderExplain`.

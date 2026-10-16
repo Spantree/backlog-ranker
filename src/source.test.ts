@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { isRefusal } from "./errors.js";
-import { assertAllowed, issueKeyIn, parseIssueKey, parseSource } from "./source.js";
+import { assertAllowed, issueKeyIn, parseIssueKey, parseSource, sourceSpec } from "./source.js";
 
 describe("parseSource", () => {
   test.each([
@@ -63,6 +63,27 @@ describe("assertAllowed", () => {
         "so the decision to send its tickets to the decision engine is reviewed like any " +
         "other settings change.",
     );
+  });
+
+  test("decides on the ref's fields, never its spec string", () => {
+    const forged = { kind: "github" as const, owner: "evil", repo: "secret", spec: "github:acme/app" };
+    expect(() => assertAllowed(forged, ["github:acme/app"], "sources")).toThrow(
+      "github:evil/secret is not on the backlog source allowlist",
+    );
+    const cased = { kind: "github" as const, owner: "Acme", repo: "App", spec: "github:Acme/App" };
+    expect(() => assertAllowed(cased, ["github:acme/app"], "sources")).not.toThrow();
+    const team = { kind: "linear" as const, team: "ops", spec: "linear:KIT" };
+    expect(() => assertAllowed(team, ["linear:KIT"], "sources")).toThrow("linear:OPS is not on");
+  });
+
+  test("refuses a hand-built ref whose fields the source grammar rejects", () => {
+    const bad = { kind: "github" as const, owner: "a/b", repo: "c", spec: "github:a/c" };
+    expect(() => assertAllowed(bad, ["github:a/c"], "sources")).toThrow("--source takes");
+  });
+
+  test("sourceSpec canonicalises the fields", () => {
+    expect(sourceSpec({ kind: "github", owner: "Acme", repo: "App", spec: "x" })).toBe("github:acme/app");
+    expect(sourceSpec({ kind: "linear", team: "eng", spec: "x" })).toBe("linear:ENG");
   });
 
   test("an empty allowlist says it lists no sources", () => {

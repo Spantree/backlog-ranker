@@ -184,6 +184,36 @@ describe("loadProject", () => {
     expect(err.message).not.toContain("GITHUB_TOKEN");
   });
 
+  test("tracker() decides on the ref's owner and repo, never the caller's spec string", () => {
+    writeConfig("config.yaml", "sources:\n  - github:acme/app\nbackend: typesafe\n");
+    const project = loadProject(root, { GITHUB_TOKEN: "t" });
+    const forged = { kind: "github" as const, owner: "evil", repo: "secret", spec: "github:acme/app" };
+    const err = refusal(() => project.tracker(forged));
+    expect(err.message).toStartWith("github:evil/secret is not on the backlog source allowlist");
+    const cased = { kind: "github" as const, owner: "Acme", repo: "App", spec: "github:Acme/App" };
+    expect(project.tracker(cased).source).toBe("github:acme/app");
+  });
+
+  test("tracker() decides on a Linear ref's team, never the caller's spec string", () => {
+    writeConfig("config.yaml", "sources:\n  - linear:KIT\nbackend: typesafe\n");
+    const project = loadProject(root, { LINEAR_API_KEY: "k" });
+    const forged = { kind: "linear" as const, team: "OPS", spec: "linear:KIT" };
+    expect(refusal(() => project.tracker(forged)).message).toStartWith(
+      "linear:OPS is not on the backlog source allowlist",
+    );
+    expect(project.tracker({ kind: "linear", team: "kit", spec: "linear:kit" }).source).toBe("linear:KIT");
+  });
+
+  test("--allow-once admits the source its ref's fields name, not its spec string", () => {
+    writeConfig("config.yaml", "sources: []\nbackend: typesafe\n");
+    const forged = { kind: "github" as const, owner: "evil", repo: "secret", spec: "github:acme/app" };
+    const project = loadProject(root, { GITHUB_TOKEN: "t" }, { allowOnce: forged });
+    expect(project.sources).toEqual(["github:evil/secret"]);
+    expect(refusal(() => project.tracker(parseSource("github:acme/app"))).message).toContain(
+      "not on the backlog source allowlist",
+    );
+  });
+
   test("the allowlist refusal names config.yaml when that is the file read", () => {
     writeConfig("config.yaml", "sources:\n  - github:kit/kit\nbackend: typesafe\n");
     const project = loadProject(root, {});
