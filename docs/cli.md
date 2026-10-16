@@ -70,7 +70,7 @@ Exits 2 when the tool's ranking is not trusted.
 
 Scores the hand-ranked issues, orders them as `rank` would (pinned, normal and sunk issues, then held issues after every ranked one) and prints both orders side by side with Kendall's tau. When the rubric is not trusted (tau under 0.4, or fewer than 12 issues), it lists the pairs the rubric orders against the hand ranking and exits 2.
 
-`--hand` keys may be written `owner/repo#N` for a GitHub source or `TEAM-N` for a Linear one, or `#N` or `N`, which expand to the source's repository or team. Keys from another repository or team, a repeated key, or fewer than two keys are refused before any request. The named issues are read in any state, so a calibration set may include issues that have since been closed or moved on.
+`--hand` keys may be written `owner/repo#N` for a GitHub source or `TEAM-N` for a Linear one, or `#N` or `N`, which expand to the source's repository or team. Text that is not an issue key (such as `#0` or `ENG-012`; numbers start at 1 with no leading zero), keys from another repository or team, a repeated key, or fewer than two keys are refused before any request, and the refusal says which keys are malformed and which belong elsewhere. The named issues are read in any state, so a calibration set may include issues that have since been closed or moved on.
 
 ```bash
 backlog-ranker calibrate -r impact-roi -s github:acme/app --hand '#12,#7,#31,#4,#18,#2,#40,#9,#22,#15,#3,#27'

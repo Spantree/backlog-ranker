@@ -101,7 +101,17 @@ describe("calibrate", () => {
     ["a duplicate key", "kit/kit#1,#1", "lists a key twice"],
     ["a single key", "kit/kit#1", "at least two"],
     ["another repository's key", "kit/kit#1,other/repo#2", "other/repo#2 not in kit/kit"],
-    ["a key that is not an issue", "kit/kit#1,KIT-2", "KIT-2 not in kit/kit"],
+    ["another tracker's key", "kit/kit#1,KIT-2", "KIT-2 not in kit/kit"],
+    [
+      "malformed keys",
+      "kit/kit#0,kit/kit#01,KIT-012,#01",
+      "--hand: kit/kit#0, kit/kit#01, KIT-012, #01 not an issue key (keys look like kit/kit#123",
+    ],
+    [
+      "a malformed key beside another repository's",
+      "#0,other/repo#2",
+      "--hand: #0 not an issue key; other/repo#2 not in kit/kit, the repository this source reads",
+    ],
   ])("%s refuses with exit 1 and zero requests", async (_, hand, message) => {
     expect(await calibrate("-r", "fixture", "-s", "github:kit/kit", "--hand", hand)).toBe(1);
     expect(stdout()).toBe("");

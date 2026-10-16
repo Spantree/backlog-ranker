@@ -4,7 +4,7 @@
  * refusals ({@link calibrateBacklog}); this module only reads keys.
  */
 
-import { issueKeyIn, type SourceRef } from "../source.js";
+import { issueKeyIn, matchIssueKey, type SourceRef } from "../source.js";
 import { usageError } from "./flags.js";
 
 /**
@@ -19,21 +19,27 @@ export function parseHand(raw: string, source: SourceRef): string[] {
     .map((k) => k.trim())
     .filter((k) => k !== "");
   const keys: string[] = [];
+  const malformed: string[] = [];
   const foreign: string[] = [];
   for (const item of items) {
     const key = issueKeyIn(item, source, { bare: true });
-    if (key === undefined) foreign.push(item);
-    else keys.push(key);
+    if (key !== undefined) keys.push(key);
+    else if (matchIssueKey(item) === undefined) malformed.push(item);
+    else foreign.push(item);
   }
-  if (foreign.length > 0) {
+  if (malformed.length > 0 || foreign.length > 0) {
     const [where, example] =
       source.kind === "github"
         ? [`${source.owner}/${source.repo}, the repository`, `${source.owner}/${source.repo}#123`]
         : [`the ${source.team} team`, `${source.team}-123`];
+    const problems = [
+      ...(malformed.length > 0 ? [`${malformed.join(", ")} not an issue key`] : []),
+      ...(foreign.length > 0 ? [`${foreign.join(", ")} not in ${where} this source reads`] : []),
+    ];
     throw usageError(
       "calibrate",
-      `--hand: ${foreign.join(", ")} not in ${where} this source reads ` +
-        `(keys look like ${example}, #123 or 123). No request was sent.`,
+      `--hand: ${problems.join("; ")} (keys look like ${example}, #123 or 123, numbered from 1). ` +
+        "No request was sent.",
     );
   }
   return keys;
