@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { type CliIo, run } from "./cli.js";
+import { type CliIo, renderError, run } from "./cli.js";
 
 function capture(env: Record<string, string | undefined> = {}) {
   const out: string[] = [];
@@ -145,5 +145,20 @@ describe("unexpected errors", () => {
     });
     expect(code).toBe(1);
     expect(c.err()).toContain("plain string");
+  });
+});
+
+describe("renderError", () => {
+  test("a null cause prints no caused-by line, as an absent one does", () => {
+    for (const err of [new Error("x", { cause: null }), new Error("x")]) {
+      const text = renderError(err, { debug: false });
+      expect(text).toStartWith("Error: x\n");
+      expect(text).not.toContain("caused by");
+    }
+  });
+
+  test("a non-null cause still prints its caused-by line", () => {
+    expect(renderError(new Error("x", { cause: "y" }), { debug: false })).toContain("caused by: y");
+    expect(renderError(null, { debug: false })).toBe("null");
   });
 });
