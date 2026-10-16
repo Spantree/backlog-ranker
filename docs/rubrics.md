@@ -13,7 +13,7 @@ The package ships an example at `rubrics/impact-roi.yaml` (in `node_modules/@fen
 | `name` | yes | | Shown in the run header |
 | `description` | no | | Free text |
 | `compose` | yes | | `roi` or `weighted_sum` |
-| `confidence_floor` | no | `0.5` | A score answered with lower confidence is flagged |
+| `confidence_floor` | no | `0.5` | A weighted criterion's score answered with lower confidence is flagged |
 | `criteria` | yes | | At least one; see below |
 | `gates` | no | `[]` | See below |
 | `fact_gates` | no | `[]` | See [Fact gates](#fact-gates) |
@@ -61,7 +61,7 @@ Only the title, body and labels leave GitHub or Linear. A body that would push t
 
 ## Scores
 
-A criterion's score is the probability-weighted level index: 0 is the first level, `levels - 1` the last. Each score carries the model's confidence. A score under `confidence_floor` keeps its value and its place; the row is flagged `low-confidence:<id>` and the table marks it with `?`.
+A criterion's score is the probability-weighted level index: 0 is the first level, `levels - 1` the last. Each score carries the model's confidence. A score under `confidence_floor` keeps its value and its place; the row is flagged `low-confidence:<id>` and the table marks it with `?`. A criterion with weight 0 (in the rubric or through `--weight id=0`) adds nothing to the composite, so its confidence never flags a row.
 
 ## Gates
 

@@ -39,7 +39,7 @@ function cell(rubric: Rubric, row: RankedRow, id: string): string {
     return `${a.probability.toFixed(2)}${sign}${gate.threshold.toFixed(2)}`;
   }
   if (a.kind === "score") {
-    const low = a.confidence < rubric.confidence_floor ? "?" : "";
+    const low = row.lowConfidence.includes(id) ? "?" : "";
     return `${a.value.toFixed(2)} c${a.confidence.toFixed(2)}${low}`;
   }
   return a.choice;
@@ -114,7 +114,7 @@ export function renderTable(opts: {
   const low = [...ranking.ranked, ...ranking.held].filter((r) => r.lowConfidence.length > 0).length;
   lines.push(
     "",
-    `Scores are probability-weighted level indexes (0 = the first level) with their confidence; ? marks confidence under ${rubric.confidence_floor.toFixed(2)}. Gates show probability against threshold.`,
+    `Scores are probability-weighted level indexes (0 = the first level) with their confidence; ? marks a weighted criterion's confidence under ${rubric.confidence_floor.toFixed(2)}. Gates show probability against threshold.`,
     `Pinned: ${pinned}. Sunk: ${sunk}. Held: ${ranking.held.length}. Low-confidence rows: ${low}. Truncated bodies: ${
       stats.truncated.length === 0 ? "none" : stats.truncated.join(", ")
     }.`,

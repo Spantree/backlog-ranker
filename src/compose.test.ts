@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { compositeOf, rank, type Scored } from "./compose.js";
 import type { DecisionAnswer } from "./engine.js";
-import { parseRubric } from "./rubric.js";
+import { parseRubric, withWeights } from "./rubric.js";
 
 const rubric = (compose: "roi" | "weighted_sum", gates = ""): ReturnType<typeof parseRubric> =>
   parseRubric(
@@ -78,6 +78,14 @@ describe("rank", () => {
     const unsure = ranking.ranked.find((x) => x.key === "UNSURE");
     expect(unsure?.lowConfidence).toEqual(["impact"]);
     expect(unsure?.composite).toBeCloseTo(3 / 3);
+  });
+
+  test("a zero-weight criterion answered under the floor raises no low-confidence flag", () => {
+    const unsure = { impact: score(2, 0.1), effort: score(2, 0.1) };
+    const zeroed = withWeights(rubric("weighted_sum"), { effort: 0 });
+    expect(rank(zeroed, [row("A", unsure)]).ranked[0]?.lowConfidence).toEqual(["impact"]);
+    const weighted = rubric("weighted_sum");
+    expect(rank(weighted, [row("A", unsure)]).ranked[0]?.lowConfidence).toEqual(["impact", "effort"]);
   });
 
   test("a pin wins over a hold: a thin security ticket stays on top, flagged", () => {
