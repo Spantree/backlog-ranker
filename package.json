@@ -1,6 +1,6 @@
 {
-  "name": "backlog-ranker",
-  "version": "2026.10.15",
+  "name": "@feniix/backlog-ranker",
+  "version": "0.1.0",
   "description": "Rank, calibrate and explain a backlog with a rubric and a decision model",
   "license": "MIT",
   "author": "Sebastian Otaegui",
@@ -35,6 +35,9 @@
   ],
   "engines": {
     "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "packageManager": "bun@1.4.3",
   "scripts": {

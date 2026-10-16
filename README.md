@@ -5,7 +5,7 @@ Rank a GitHub repository's open issues, or a Linear team's pending issues, by a 
 ## Install
 
 ```bash
-npm install --save-dev backlog-ranker
+npm install --save-dev @feniix/backlog-ranker
 ```
 
 Node 22 or later, or Bun.
@@ -20,7 +20,7 @@ export GITHUB_TOKEN=$(gh auth token)
 export OPENROUTER_API_KEY=...   # or TYPESAFE_API_KEY with --backend typesafe
 
 npx backlog-ranker rank \
-  --rubric node_modules/backlog-ranker/rubrics/impact-roi.yaml \
+  --rubric node_modules/@feniix/backlog-ranker/rubrics/impact-roi.yaml \
   --source github:octocat/hello-world \
   --allow-once --backend openrouter
 ```

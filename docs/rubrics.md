@@ -4,7 +4,7 @@ A rubric is a YAML file that says what to ask about each issue and how code turn
 
 Rubrics live in `.backlog-ranker/rubrics/<name>.yaml` and are passed by name: `--rubric impact-roi`. A gitignored `<name>.local.yaml` beside it replaces the committed file outright when it exists, and the run header names the file it read. Every verb (`rank`, `calibrate` and `explain`) also accepts a file path: anything containing a `/` or ending in `.yaml` or `.yml`. A rubric name is lowercase letters, digits and dashes, at most 64 characters.
 
-The package ships an example at `rubrics/impact-roi.yaml` (in `node_modules/backlog-ranker/rubrics/` once installed). Copy it into your project and reword it.
+The package ships an example at `rubrics/impact-roi.yaml` (in `node_modules/@feniix/backlog-ranker/rubrics/` once installed). Copy it into your project and reword it.
 
 ## Schema
 

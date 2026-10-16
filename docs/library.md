@@ -3,7 +3,7 @@
 Everything the CLI does is exported from the package root, with type declarations. The package is ESM and runs on Node 22 or later and on Bun.
 
 ```ts
-import { rankBacklog } from "backlog-ranker";
+import { rankBacklog } from "@feniix/backlog-ranker";
 ```
 
 ## The project path: loadProject
@@ -11,7 +11,7 @@ import { rankBacklog } from "backlog-ranker";
 `loadProject(cwd, env, options?)` is the path the CLI takes. It finds the project root, reads `.backlog-ranker/config.yaml` (or `config.local.yaml`), and returns the allowlist with an engine and a tracker that are built only when you ask for them. `tracker(source)` checks the source against the allowlist itself and refuses an unlisted one before reading a token or building anything. The CLI also calls `assertAllowed` first, so an unlisted source is refused before the rubric is read; do the same if your code reads anything before building the tracker.
 
 ```ts
-import { assertAllowed, loadProject, loadRubric, openCache, parseSource, rankBacklog } from "backlog-ranker";
+import { assertAllowed, loadProject, loadRubric, openCache, parseSource, rankBacklog } from "@feniix/backlog-ranker";
 
 const project = loadProject(process.cwd(), process.env);
 const source = parseSource("github:acme/app");
@@ -37,7 +37,7 @@ console.log(result.stats.requests, "requests,", result.stats.cachedAnswers, "ans
 `createJevEngine`, `githubTracker` and `linearTracker` take their keys directly. This path has no config file and so no allowlist: deciding which repositories or teams may be sent to the provider is up to your code.
 
 ```ts
-import { createJevEngine, githubTracker, openCache, rankBacklog } from "backlog-ranker";
+import { createJevEngine, githubTracker, openCache, rankBacklog } from "@feniix/backlog-ranker";
 
 const engine = createJevEngine({
   backend: "openrouter",
@@ -64,7 +64,7 @@ console.log(ranking.ranked.map((row) => row.key));
 `linearTracker(options)`: `team` (the team key, as in `ENG-123`), `apiKey` (a personal API key, sent without a `Bearer` prefix), and optionally `apiKeyVar` (named in auth refusals, default `LINEAR_API_KEY`), `states` (workflow state names or types to rank, case-insensitive; default `DEFAULT_LINEAR_STATES`, `["backlog", "unstarted"]`), `fetch` and `timeoutMs` (per request, default 30000). `pending()` reads the team's workflow states, refuses a `states` entry that matches none of them (listing the team's states) or an empty list, then pages through the issues in the matched states. `issues(keys)` takes `TEAM-123` keys of its own team, in any state, and refuses another team's keys before any request. Every reply is checked against a schema; one of an unexpected shape refuses naming the field path. Failures are `LinearTrackerError`s.
 
 ```ts
-import { linearTracker } from "backlog-ranker";
+import { linearTracker } from "@feniix/backlog-ranker";
 
 const tracker = linearTracker({ team: "ENG", apiKey: process.env.LINEAR_API_KEY ?? "", states: ["Todo"] });
 ```
@@ -84,7 +84,7 @@ Each row (`RankedRow`) carries `key`, `title`, `url`, `composite`, `answers`, `f
 Takes the same options as `rankBacklog` without `tiebreak`, plus `hand`: issue keys best first (`acme/app#12`, `ENG-12`), in any case: each is matched to the issue read for it case-insensitively and counted under the tracker's spelling, so `ACME/app#12` counts as `acme/app#12`, and two spellings of one key are refused as a repeat. With a tracker it reads only those issues.
 
 ```ts
-import { calibrateBacklog, type DecisionEngine, type AnswerCache, type Tracker } from "backlog-ranker";
+import { calibrateBacklog, type DecisionEngine, type AnswerCache, type Tracker } from "@feniix/backlog-ranker";
 
 declare const engine: DecisionEngine;
 declare const cache: AnswerCache;
@@ -108,7 +108,7 @@ for (const { above, below } of calibration.disagreements) console.log(`${above} 
 Takes the options every facade shares (`DecisionRunOptions`: `rubric`, `engine`, `cache` and optionally `now`) and either `ticket` or both `tracker` and `key`. Returns the composite, per-criterion `score`, `confidence`, `lowConfidence` and per-level `probability`, per-gate `probability`, `threshold`, `triggered` (the answer crossed the threshold) and `outcome` (`pinned`, `held`, `none`, `overridden by hold` or `overridden by pin`), `facts` (the age bucket and every numeric fact, including those only fact gates read), per-fact-gate `fact`, `action`, `atLeast`, `value`, `fired` and `outcome` (`held`, `sunk`, `none`, `overridden by hold` or `overridden by pin`: a fired gate that [precedence](rubrics.md#precedence) overrode), `flags` (`pinnedBy`, `heldBy`, `sunkBy`, `lowConfidence`, and `truncated`, when the body was cut to fit the prompt) and `stats`. A rubric can be built in memory with `rubricSchema.parse` (or `parseRubric(yamlText, origin)`), which applies the defaults:
 
 ```ts
-import { explainTicket, rubricSchema, type AnswerCache, type DecisionEngine, type Ticket } from "backlog-ranker";
+import { explainTicket, rubricSchema, type AnswerCache, type DecisionEngine, type Ticket } from "@feniix/backlog-ranker";
 
 declare const engine: DecisionEngine;
 declare const cache: AnswerCache;
@@ -143,7 +143,7 @@ for (const c of explained.criteria) console.log(c.id, c.score.toFixed(2), c.leve
 A tracker is any object that satisfies `Tracker`:
 
 ```ts
-import type { Ticket, Tracker } from "backlog-ranker";
+import type { Ticket, Tracker } from "@feniix/backlog-ranker";
 
 declare function loadFromMyTracker(): Promise<Ticket[]>;
 
@@ -170,7 +170,7 @@ export const myTracker: Tracker = {
 A decision engine is any object that satisfies `DecisionEngine`: an `id` and a pinned `model` (both part of every cache key) and `decide(state, questions)`, which answers every question about one state in one call. Questions are `score` (ordered `levels`), `noul` (yes/no) or `choice` (named `options`, used by the tie-break). This one answers without a model, which is useful in tests:
 
 ```ts
-import type { DecisionAnswer, DecisionEngine } from "backlog-ranker";
+import type { DecisionAnswer, DecisionEngine } from "@feniix/backlog-ranker";
 
 export const middleEngine: DecisionEngine = {
   id: "fixed",
@@ -210,7 +210,7 @@ Every error the tool expects you to fix is a `RefusalError`: a usage or config p
 Use `isRefusal(err)` rather than `instanceof`: it checks a registry symbol, so it recognises refusals from another copy of the package (a symlinked or duplicated install). `isHelpRequest(err)` does the same for the `HelpRequest` a `--help` throws.
 
 ```ts
-import { isRefusal, rankBacklog, type RankOptions } from "backlog-ranker";
+import { isRefusal, rankBacklog, type RankOptions } from "@feniix/backlog-ranker";
 
 declare const options: RankOptions;
 
