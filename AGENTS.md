@@ -33,12 +33,14 @@ CI (`.github/workflows/ci.yml`) runs these on every pull request and push to `ma
 
 ## Releasing
 
-The package publishes to npm as `@feniix/backlog-ranker`. To release: bump `version` in `package.json` on a branch, merge to `main`, then run the **Release** workflow (`.github/workflows/release.yml`) by hand from `main`. It re-runs the checks and the smoke test, then `npm publish`; npm refuses a version already published. It authenticates with npm trusted publishing, so no npm token is stored. npm attaches a provenance attestation linking each version to the commit and workflow run that built it; the first, hand-published version has none.
+The package publishes to npm as `@feniix/backlog-ranker`. To release: bump `version` in `package.json` on a branch, merge to `main`, then run the **Release** workflow (`.github/workflows/release.yml`) by hand from `main` (`gh workflow run release.yml --ref main`). It re-runs the checks and the smoke test, then `npm publish --loglevel verbose`; npm refuses a version already published. It authenticates with npm trusted publishing, so no npm token exists anywhere, and npm attaches a provenance attestation linking each version to the commit and workflow run that built it. 0.1.2 was the first release published this way; 0.1.0 and 0.1.1 were published by hand and carry no provenance.
 
-One-time setup, by the owner of the `@feniix` npm scope:
+The npm side, as configured on the package's settings page:
 
-1. Publish the first version by hand to create the package: `mise exec -- npm login`, then `mise exec -- npm publish` from a clean `main`.
-2. On npmjs.com, under the package's settings, add a trusted publisher: GitHub Actions, repository `Spantree/backlog-ranker`, workflow `release.yml`, no environment.
+- Trusted publisher: GitHub Actions, organization `Spantree` (capital S: every field is case-sensitive, and a lowercase `spantree` fails the exchange), repository `backlog-ranker`, workflow `release.yml`, no environment, direct `npm publish` allowed. A saved entry cannot be edited: delete it and add a new one, which must complete a publish within 2 days to stay valid.
+- Publishing access: two-factor authentication required and tokens disallowed. A maintainer can still publish by hand with a passkey (`mise exec -- npm publish --auth-type=web`, from a real terminal).
+
+When a publish fails with `ENEEDAUTH` or `E404`, the verbose log's `oidc` lines carry npm's real reason: `OIDC token exchange error - package not found` means the trusted publisher does not match the run (owner, repository, workflow file or environment).
 
 
 ## Invariants
