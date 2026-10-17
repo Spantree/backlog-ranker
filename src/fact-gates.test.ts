@@ -20,6 +20,159 @@ const cacheFor = (engine: DecisionEngine): AnswerCache =>
 
 const keys = (rows: readonly { key: string }[]): string[] => rows.map((r) => r.key);
 
+describe("gate precedence agrees between ranking and explanation", () => {
+  const cases = [
+    {
+      title: "middling",
+      openBlockers: 0,
+      openClosingPrs: 0,
+      expected: { held: false, pin: "none", hold: "none", sink: "none", factHold: "none" },
+    },
+    {
+      title: "middling",
+      openBlockers: 1,
+      openClosingPrs: 0,
+      expected: { held: false, pin: "none", hold: "none", sink: "sunk", factHold: "none" },
+    },
+    {
+      title: "middling",
+      openBlockers: 0,
+      openClosingPrs: 1,
+      expected: { held: true, pin: "none", hold: "none", sink: "none", factHold: "held" },
+    },
+    {
+      title: "middling",
+      openBlockers: 1,
+      openClosingPrs: 1,
+      expected: { held: true, pin: "none", hold: "none", sink: "overridden by hold", factHold: "held" },
+    },
+    {
+      title: "token in a log",
+      openBlockers: 0,
+      openClosingPrs: 0,
+      expected: { held: false, pin: "pinned", hold: "none", sink: "none", factHold: "none" },
+    },
+    {
+      title: "token in a log",
+      openBlockers: 1,
+      openClosingPrs: 0,
+      expected: { held: false, pin: "pinned", hold: "none", sink: "overridden by pin", factHold: "none" },
+    },
+    {
+      title: "token in a log",
+      openBlockers: 0,
+      openClosingPrs: 1,
+      expected: { held: true, pin: "overridden by hold", hold: "none", sink: "none", factHold: "held" },
+    },
+    {
+      title: "token in a log",
+      openBlockers: 1,
+      openClosingPrs: 1,
+      expected: {
+        held: true,
+        pin: "overridden by hold",
+        hold: "none",
+        sink: "overridden by hold",
+        factHold: "held",
+      },
+    },
+    {
+      title: "something vague",
+      openBlockers: 0,
+      openClosingPrs: 0,
+      expected: { held: true, pin: "none", hold: "held", sink: "none", factHold: "none" },
+    },
+    {
+      title: "something vague",
+      openBlockers: 1,
+      openClosingPrs: 0,
+      expected: { held: true, pin: "none", hold: "held", sink: "overridden by hold", factHold: "none" },
+    },
+    {
+      title: "something vague",
+      openBlockers: 0,
+      openClosingPrs: 1,
+      expected: { held: true, pin: "none", hold: "held", sink: "none", factHold: "held" },
+    },
+    {
+      title: "something vague",
+      openBlockers: 1,
+      openClosingPrs: 1,
+      expected: { held: true, pin: "none", hold: "held", sink: "overridden by hold", factHold: "held" },
+    },
+    {
+      title: "vague leak",
+      openBlockers: 0,
+      openClosingPrs: 0,
+      expected: { held: false, pin: "pinned", hold: "overridden by pin", sink: "none", factHold: "none" },
+    },
+    {
+      title: "vague leak",
+      openBlockers: 1,
+      openClosingPrs: 0,
+      expected: {
+        held: false,
+        pin: "pinned",
+        hold: "overridden by pin",
+        sink: "overridden by pin",
+        factHold: "none",
+      },
+    },
+    {
+      title: "vague leak",
+      openBlockers: 0,
+      openClosingPrs: 1,
+      expected: { held: true, pin: "overridden by hold", hold: "held", sink: "none", factHold: "held" },
+    },
+    {
+      title: "vague leak",
+      openBlockers: 1,
+      openClosingPrs: 1,
+      expected: {
+        held: true,
+        pin: "overridden by hold",
+        hold: "held",
+        sink: "overridden by hold",
+        factHold: "held",
+      },
+    },
+  ] as const;
+
+  for (const { title, openBlockers, openClosingPrs, expected } of cases) {
+    test(`${title} with ${openBlockers} open blockers and ${openClosingPrs} open closing pull requests`, async () => {
+      const engine = stubEngine();
+      const cache = cacheFor(engine);
+      const rubric = rubricWith();
+      const subject = ticket(1, title, { openBlockers, openClosingPrs });
+      const options = { rubric, engine, cache, now: () => NOW };
+      const { ranking } = await rankBacklog({ ...options, tickets: [subject] });
+      const explained = await explainTicket({ ...options, ticket: subject });
+      expect(ranking.held.map((r) => r.key)).toEqual(expected.held ? [subject.key] : []);
+      expect(ranking.ranked.map((r) => r.key)).toEqual(expected.held ? [] : [subject.key]);
+      expect(explained.gates.map((g) => g.outcome)).toEqual([expected.pin, expected.hold]);
+      expect(explained.factGates.map((g) => g.outcome)).toEqual([expected.sink, expected.factHold]);
+      const row = ranking.held[0] ?? ranking.ranked[0];
+      expect(row).toMatchObject(explained.flags);
+      expect(row?.composite).toBe(explained.composite);
+      // Explanation must reuse the answers and leave the public row shape alone.
+      expect(engine.calls).toBe(1);
+      expect(Object.keys(row ?? {}).sort()).toEqual([
+        "answers",
+        "composite",
+        "facts",
+        "heldBy",
+        "key",
+        "lowConfidence",
+        "pinnedBy",
+        "sunkBy",
+        "title",
+        "truncated",
+        "url",
+      ]);
+    });
+  }
+});
+
 async function rankOf(tickets: Ticket[], rubric = rubricWith(), tiebreak?: number) {
   const engine = stubEngine();
   const result = await rankBacklog({
