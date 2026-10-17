@@ -37,6 +37,7 @@ CI runs all of them on every pull request and push to `main`.
 
 ## When you need more
 
+- **Changelog**: include notable changes in `CHANGELOG.md` under Unreleased in the same PR; maintenance-only changes need no entry.
 - **Releasing** a version to npm, or a failed Release workflow: `docs/agents/releasing.md`.
 - **Re-recording** the Jev fixtures, after changing the fixture rubric, the fixture issues or the state sent: `docs/agents/fixtures.md`.
 - **Issues and specs** live in GitHub Issues on Spantree/backlog-ranker, via `gh`: `docs/agents/issue-tracker.md`. Triage labels: `docs/agents/triage-labels.md`.
