@@ -12,6 +12,8 @@ Release dates use UTC npm publication dates.
 
 ### Changed
 
+- Generate GitHub release notes from the matching version in this changelog,
+  and refuse missing, duplicate or empty release sections before npm publishing.
 - Centralize gate firing, precedence and effective outcomes so ranking and
   explanation share the same policy. Public flags, output and ranking behavior
   are unchanged. ([#6](https://github.com/Spantree/backlog-ranker/pull/6))
