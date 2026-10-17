@@ -1,7 +1,7 @@
 name: Release
 
 # Publishes package.json's version to npm, then tags it v<version> and
-# posts a GitHub release with notes from scripts/release-notes.sh. Run it
+# posts a GitHub release with the matching CHANGELOG.md section. Run it
 # by hand from main; npm refuses a version that is already published.
 # Authenticates with npm trusted publishing (OIDC), so no npm token is
 # stored in the repository.
@@ -22,6 +22,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v3
+      # Refuse missing, duplicate or empty release notes before publishing.
+      - name: Validate release changelog
+        run: node scripts/release-notes.mjs "$(node -p 'require("./package.json").version')" > /dev/null
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bun run lint
@@ -40,11 +43,10 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
+      - uses: jdx/mise-action@v3
       - env:
           GH_TOKEN: ${{ github.token }}
         run: |
           version="$(node -p 'require("./package.json").version')"
-          scripts/release-notes.sh "$version" > notes.md
-          gh release create "v$version" --target "$GITHUB_SHA" --title "v$version" --notes-file notes.md
+          node scripts/release-notes.mjs "$version" > "$RUNNER_TEMP/release-notes.md"
+          gh release create "v$version" --target "$GITHUB_SHA" --title "v$version" --notes-file "$RUNNER_TEMP/release-notes.md"

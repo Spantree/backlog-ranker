@@ -6,7 +6,7 @@
  */
 
 import type { DecisionAnswer, DecisionQuestion } from "./engine.js";
-import type { Criterion, FactGate, Rubric } from "./rubric.js";
+import type { Criterion, FactGate, Gate, Rubric } from "./rubric.js";
 import { byCodePoint } from "./state.js";
 import type { TicketFacts } from "./ticket.js";
 
@@ -104,34 +104,111 @@ function byComposite(a: RankedRow, b: RankedRow): number {
   return b.composite - a.composite || byCodePoint(a.key, b.key);
 }
 
-export function rank(rubric: Rubric, rows: readonly Scored[]): Ranking {
+export interface ExplainedGate {
+  id: string;
+  action: Gate["action"];
+  threshold: number;
+  probability: number;
+  /** Whether the answer crossed the threshold: a pin at or above it, a
+   * hold under it. */
+  triggered: boolean;
+  /** What the gate did once precedence applied: a fact-gate hold
+   * overrides a pin, and a pin overrides a model-gate hold. */
+  outcome: "pinned" | "held" | "none" | "overridden by hold" | "overridden by pin";
+}
+
+export interface ExplainedFactGate {
+  id: string;
+  fact: FactGate["fact"];
+  action: FactGate["action"];
+  atLeast: number;
+  /** The ticket's value of `fact`. */
+  value: number;
+  /** Whether the fact is at least `atLeast`. */
+  fired: boolean;
+  /** What the gate did once precedence applied: a fired sink on a held
+   * or pinned ticket does nothing. */
+  outcome: "held" | "sunk" | "none" | "overridden by hold" | "overridden by pin";
+}
+
+interface ComposedRow {
+  row: RankedRow;
+  held: boolean;
+  gates: ExplainedGate[];
+  factGates: ExplainedFactGate[];
+}
+
+/** Internal seam shared by ranking and explanation; not exported from
+ * the package root. Fired flags retain their historical meaning, while
+ * effective outcomes account for precedence. Outcome details stay
+ * beside the public ranked row, never on it as extra fields. */
+export function composeRow(rubric: Rubric, row: Scored): ComposedRow {
   // Precedence: a fact-gate hold wins over a pin (an open closing pull
   // request means someone is on it), a pin wins over a model-gate hold
   // ("any security issue jumps the queue" holds even for a thin ticket,
   // which stays on top carrying its held flag) and over a sink, and a
   // sink applies only to rows neither pinned nor held.
+  const gates = rubric.gates.map((g) => {
+    const a = row.answers[g.id];
+    if (a?.kind !== "noul") throw new Error(`${row.key} has no noul answer for gate "${g.id}"`);
+    return {
+      id: g.id,
+      action: g.action,
+      threshold: g.threshold,
+      probability: a.probability,
+      triggered: g.action === "pin_top" ? a.probability >= g.threshold : a.probability < g.threshold,
+    };
+  });
+  const pinnedBy = gates.filter((g) => g.action === "pin_top" && g.triggered).map((g) => g.id);
+  const heldBy = gates.filter((g) => g.action === "flag_if_below" && g.triggered).map((g) => g.id);
+  const factGates = rubric.fact_gates.map((g) => ({
+    id: g.id,
+    fact: g.fact,
+    action: g.action,
+    atLeast: g.at_least,
+    value: row.facts?.[g.fact] ?? 0,
+    fired: factGateFires(g, row),
+  }));
+  const factHolds = factGates.filter((g) => g.action === "hold" && g.fired).map((g) => g.id);
+  heldBy.push(...factHolds);
+  const held = factHolds.length > 0 || (heldBy.length > 0 && pinnedBy.length === 0);
+  const pinned = pinnedBy.length > 0;
+  const sunkBy =
+    held || pinned ? [] : factGates.filter((g) => g.action === "sink" && g.fired).map((g) => g.id);
+  const overridden = held ? "overridden by hold" : "overridden by pin";
+  // A zero-weight criterion adds nothing to the composite, so its
+  // confidence has nothing to warn about.
+  const lowConfidence = rubric.criteria
+    .filter((c) => c.weight > 0 && scoreOf(row, c).confidence < rubric.confidence_floor)
+    .map((c) => c.id);
+  return {
+    row: { ...row, composite: compositeOf(rubric, row), pinnedBy, heldBy, sunkBy, lowConfidence },
+    held,
+    gates: gates.map((g) => ({
+      ...g,
+      outcome: !g.triggered
+        ? "none"
+        : g.action === "pin_top"
+          ? held
+            ? overridden
+            : "pinned"
+          : held
+            ? "held"
+            : overridden,
+    })),
+    factGates: factGates.map((g) => ({
+      ...g,
+      outcome: !g.fired ? "none" : g.action === "hold" ? "held" : held || pinned ? overridden : "sunk",
+    })),
+  };
+}
+
+export function rank(rubric: Rubric, rows: readonly Scored[]): Ranking {
   const heldKeys = new Set<string>();
-  const out: RankedRow[] = rows.map((row) => {
-    const pinnedBy: string[] = [];
-    const heldBy: string[] = [];
-    const sunkBy: string[] = [];
-    for (const g of rubric.gates) {
-      const a = row.answers[g.id];
-      if (a?.kind !== "noul") throw new Error(`${row.key} has no noul answer for gate "${g.id}"`);
-      if (g.action === "pin_top" && a.probability >= g.threshold) pinnedBy.push(g.id);
-      if (g.action === "flag_if_below" && a.probability < g.threshold) heldBy.push(g.id);
-    }
-    const fired = rubric.fact_gates.filter((g) => factGateFires(g, row));
-    const factHolds = fired.filter((g) => g.action === "hold").map((g) => g.id);
-    heldBy.push(...factHolds);
-    if (factHolds.length > 0 || (heldBy.length > 0 && pinnedBy.length === 0)) heldKeys.add(row.key);
-    else if (pinnedBy.length === 0) sunkBy.push(...fired.filter((g) => g.action === "sink").map((g) => g.id));
-    // A zero-weight criterion adds nothing to the composite, so its
-    // confidence has nothing to warn about.
-    const lowConfidence = rubric.criteria
-      .filter((c) => c.weight > 0 && scoreOf(row, c).confidence < rubric.confidence_floor)
-      .map((c) => c.id);
-    return { ...row, composite: compositeOf(rubric, row), pinnedBy, heldBy, sunkBy, lowConfidence };
+  const out = rows.map((row) => {
+    const composed = composeRow(rubric, row);
+    if (composed.held) heldKeys.add(row.key);
+    return composed.row;
   });
   const held = out.filter((r) => heldKeys.has(r.key)).sort(byComposite);
   const kept = out.filter((r) => !heldKeys.has(r.key));
