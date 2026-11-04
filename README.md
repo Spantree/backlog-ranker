@@ -88,5 +88,6 @@ Keep the cache and local overrides out of git ([why](docs/config.md#local-overri
 | Call it from TypeScript | [docs/library.md](docs/library.md) |
 | Rank on a schedule in GitHub Actions | [docs/github-actions.md](docs/github-actions.md) |
 | Build and calibrate a rubric with Claude | copy `skills/backlog-ranker/` into `~/.claude/skills/` |
+| See what it is for and why it exists | [the project page](https://feniix-hq.net/projects/backlog-ranker/) |
 
 Deferred work: [ROADMAP.md](ROADMAP.md).
